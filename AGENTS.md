@@ -39,32 +39,51 @@ Every agent working on this codebase must strictly adhere to the following twent
 
 ## 3. Active Phase Governance
 
-- **Active Phase**: **Phase 01 — Product, Brand & Foundation**
-- **Current Allowed Activity**: Documentation, specifications, architecture blueprints, design tokens, personas, user journeys, testing strategy.
-- **Strictly Prohibited in Phase 01**:
-  - Writing Next.js, Flutter, React, or mobile application code
-  - Initializing live database instances or running active Supabase/PostgreSQL projects
-  - Creating mock API servers or production endpoints
-  - Implementing GPS drivers, push notification workers, or payment webhooks
-  - Installing heavy application dependencies
+- **Completed Phases**:
+  - **Phase 01 — Product, Brand & Foundation**: PRD, Personas, Roles, Brand, Design Tokens, QA Strategy.
+  - **Phase 02 — Architecture + Monorepo + Engineering Foundation**: Monorepo, Workspaces, Packages, Web/Mobile shell foundations, Database contract, CI pipeline.
+- **Current Active Phase**: **Phase 02 / Transitioning to Phase 03**
+- **Strictly Prohibited in Phase 02**:
+  - Implementing live business functionality: Task CRUD, Attendance tracking, GPS drivers, Visit dispatch, Payment gateways, AI assistants, CRM, or Chat feeds.
+  - Adding unvetted external dependencies.
 
 ---
 
-## 4. Conflict Resolution & Consistency Protocol
+## 4. AI Agent Safety & Execution Protocol
+
+Future AI coding agents working on this repository must execute tasks according to this mandatory protocol:
+1. **Read AGENTS.md first** to confirm active phase constraints and governance rules.
+2. **Read relevant architecture documentation** under `docs/architecture/` before modifying code.
+3. **Identify active phase boundaries** and verify that requested changes do not cross phase gates.
+4. **Implement the smallest valid change** that completely satisfies the immediate requirement.
+5. **Add tests alongside every change** (unit, integration, or security tests).
+6. **Run local validation suites** (`pnpm typecheck`, `pnpm test`, `flutter test`) to verify correctness.
+7. **Update documentation** whenever an architectural or contract change is made.
+8. **Report test and build results factually**; never claim a task passed without automated verification.
+9. **Never bypass CI or weaken security** to force green status.
+
+---
+
+## 5. Architectural Boundaries & Monorepo Rules
+
+- **Web Application (`apps/web`)**: Next.js App Router for management consoles. Must consume `@fieldops/api`, `@fieldops/config`, `@fieldops/types`, and `@fieldops/design-tokens`. Must not duplicate backend validation logic or access PostgreSQL directly.
+- **Mobile Application (`apps/mobile`)**: Flutter 3.24+ for field workers. Must use Riverpod for state and Drift/SQLite for local persistence. Must strictly route all mutations through the offline mutation queue.
+- **Shared Packages (`packages/*`)**: Decoupled, modular TypeScript packages. `@fieldops/types` contains no runtime side-effects; `@fieldops/config` prevents server secret exposure; `@fieldops/design-tokens` is the single source of truth for styles.
+- **Database (`supabase/`)**: All migrations live in `supabase/migrations/` with sequential timestamp naming. Every tenant-owned table must enable PostgreSQL Row-Level Security (`current_tenant_id()`).
+
+---
+
+## 6. Conflict Resolution & Consistency Protocol
 
 If an agent identifies an ambiguity, contradiction, or discrepancy in specifications:
 1. Do not make arbitrary assumptions or silently select one path.
 2. Check `docs/product/open-decisions.md` to see if the item is already recorded.
-3. If unrecorded, document the contradiction in `docs/product/open-decisions.md` with:
-   - File references and conflicting statements
-   - Business & architectural impact
-   - Proposed options and trade-offs
-   - Recommended resolution
+3. If unrecorded, document the contradiction in `docs/product/open-decisions.md` with file references, impact, trade-offs, and proposed resolution.
 4. Escalate to the product architect / user before proceeding with implementation.
 
 ---
 
-## 5. Artifact Directory & File Hygiene
+## 7. Artifact Directory & File Hygiene
 
 - Active project workspace: `/workspace/clever-darwin`.
 - All project files must remain within `/workspace/clever-darwin`.

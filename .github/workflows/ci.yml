@@ -1,0 +1,91 @@
+name: FieldOps CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-web-and-packages:
+    name: Web & Shared Packages Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 12.6.0
+          run_install: false
+
+      - name: Install Monorepo Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript Typecheck
+        run: pnpm typecheck
+
+      - name: Execute Vitest Suite
+        run: pnpm test
+
+      - name: Build Shared Packages & Applications
+        run: pnpm build
+
+  validate-mobile:
+    name: Flutter Mobile Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter Dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: Static Code Analysis
+        working-directory: apps/mobile
+        run: flutter analyze --fatal-infos
+
+      - name: Run Mobile Unit & Widget Tests
+        working-directory: apps/mobile
+        run: flutter test
+
+  security-scan:
+    name: Security & Secret Scan Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 12.6.0
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Secret Leakage Prevention Tests
+        run: npx vitest run tests/security/secret-exposure.test.ts
