@@ -9,6 +9,8 @@ import {
   LocationService,
   VisitService,
   AttendanceService,
+  ReportService,
+  BillingService,
 } from '@fieldops/api';
 import { loadClientConfig } from '@fieldops/config';
 
@@ -78,6 +80,14 @@ export function getVisitService(): VisitService {
 
 export function getAttendanceService(): AttendanceService {
   return new AttendanceService(getApiClient());
+}
+
+export function getReportService(): ReportService {
+  return new ReportService(getApiClient());
+}
+
+export function getBillingService(): BillingService {
+  return new BillingService(getApiClient());
 }
 
 

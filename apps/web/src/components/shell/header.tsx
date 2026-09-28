@@ -17,6 +17,8 @@ export function AppHeader() {
   const canManageMembers = can(role, Permissions.MEMBER_INVITE);
   const canViewMap = can(role, Permissions.LOCATION_VIEW_ALL) || can(role, Permissions.LOCATION_VIEW_TEAM);
   const canViewWorkforce = can(role, Permissions.MEMBER_PROFILE_VIEW_TEAM);
+  const canViewReports = can(role, Permissions.REPORT_VIEW);
+  const canManageBilling = role === UserRole.OWNER || role === UserRole.ADMIN;
 
   return (
     <header className="sticky top-0 z-50 flex h-14 w-full items-center justify-between border-b border-border bg-surface px-6">
@@ -85,6 +87,20 @@ export function AppHeader() {
               <Link href="/locations" className="hover:text-primary transition-colors">
                 Locations
               </Link>
+
+              {/* Reports */}
+              {canViewReports && (
+                <Link href="/reports" className="hover:text-primary transition-colors">
+                  Reports
+                </Link>
+              )}
+
+              {/* Billing */}
+              {canManageBilling && (
+                <Link href="/settings/billing" className="hover:text-primary transition-colors">
+                  Billing
+                </Link>
+              )}
 
               {/* Admin */}
               {canManageMembers && (

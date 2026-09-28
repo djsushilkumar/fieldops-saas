@@ -47,9 +47,10 @@ Every agent working on this codebase must strictly adhere to the following twent
   - **Phase 05 — Field Operations, Visits, GPS Verification & Proof of Work**: Geofenced Locations, Visit Lifecycle State Machine, Haversine Distance Calculation, Check-in/out, Exception Overrides, Proofs (Photos, Signatures, Notes), Offline Visits Queue, Security & Geospatial Suites.
   - **Phase 06 — Attendance & Shift Tracking**: Shift clock-in/out, GPS point-in-time acquisition, duration calculation, duplicate shift prevention, audited manual adjustments, worker activity ledger, web attendance board, mobile duty timer, offline mutation queueing, and tenant isolation.
   - **Phase 07 — Manager/Admin Web Operations Dashboard**: Situational awareness operations dashboard, 6 core KPIs, operational exception alerts, Day/Week calendar dispatch views, geospatial operational live map with discrete check-in pins and accessible table toggle, workforce roster, team crew management, immutable worker activity ledger, tenant-scoped realtime query invalidation, and role-scoped operational navigation.
-- **Current Active Phase**: **Phase 07 Completed / Transitioning to Phase 08 (Reporting, Analytics & SaaS Billing)**
+  - **Phase 08 — Reports, Exports, Usage Metering & SaaS Billing**: Operational reports (Tasks, Visits & Geofences, Attendance & Shifts, Workforce Activity), RFC 4180 CSV builder with UTF-8 BOM and formula sanitization, bounded row limits (5,000 max), report audit logs, data minimization (discrete location verification result, no raw GPS breadcrumbs), SaaS subscriptions (FREE, STARTER, GROWTH, BUSINESS), centralized entitlement matrices, atomic usage counter functions (`check_and_increment_usage`), BillingProvider abstraction & deterministic MockBillingProvider, webhook idempotency (`provider_event_id`), customer portal, non-destructive downgrade invariance, and Owner/Admin billing console UI.
+- **Current Active Phase**: **Phase 08 Completed (Reports, Exports, Usage Metering & SaaS Billing)**
 - **Strictly Prohibited in Current State**:
-  - Implementing live business functionality outside active phase boundaries: Live continuous GPS hardware drivers / fleet telematics, Route optimization dispatch algorithms, Payment gateways, AI assistants, CRM, or Chat feeds.
+  - Implementing live business functionality outside active phase boundaries: Live continuous GPS hardware drivers / fleet telematics, Route optimization dispatch algorithms, AI assistants, CRM, or Chat feeds.
   - Adding unvetted external dependencies.
 
 

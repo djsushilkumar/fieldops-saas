@@ -85,6 +85,9 @@ export enum Priority {
   URGENT = 'URGENT',
 }
 
+export type TaskPriority = Priority;
+export const TaskPriority = Priority;
+
 export enum TaskStatus {
   DRAFT = 'DRAFT',
   ASSIGNED = 'ASSIGNED',
@@ -519,6 +522,16 @@ export enum ErrorCode {
   VISIT_INVALID_STATUS_TRANSITION = 'VISIT_INVALID_STATUS_TRANSITION',
   VISIT_PROOF_INCOMPLETE = 'VISIT_PROOF_INCOMPLETE',
   VISIT_CONFLICT = 'VISIT_CONFLICT',
+  // Billing & SaaS Subscriptions (Phase 08)
+  PLAN_LIMIT_REACHED = 'PLAN_LIMIT_REACHED',
+  FEATURE_NOT_ENTITLED = 'FEATURE_NOT_ENTITLED',
+  BILLING_ACTION_REQUIRED = 'BILLING_ACTION_REQUIRED',
+  BILLING_ACCESS_DENIED = 'BILLING_ACCESS_DENIED',
+  WEBHOOK_INVALID = 'WEBHOOK_INVALID',
+  // Reporting & Exports (Phase 08)
+  REPORT_ACCESS_DENIED = 'REPORT_ACCESS_DENIED',
+  REPORT_RANGE_TOO_LARGE = 'REPORT_RANGE_TOO_LARGE',
+  REPORT_EXPORT_LIMIT_REACHED = 'REPORT_EXPORT_LIMIT_REACHED',
 }
 
 export interface ApiErrorDetail {
@@ -683,6 +696,10 @@ export const Permissions = {
   ATTENDANCE_VIEW_TEAM: 'attendance:view:team',
   ATTENDANCE_ADJUST: 'attendance:adjust',
 
+  // Reports & Analytics (Phase 08)
+  REPORT_VIEW: 'report:view',
+  REPORT_EXPORT: 'report:export',
+
   // Audit Logs & Security
   AUDIT_VIEW: 'audit:view',
 } as const;
@@ -727,6 +744,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_ORG,
     Permissions.ATTENDANCE_ADJUST,
+    Permissions.REPORT_VIEW,
+    Permissions.REPORT_EXPORT,
     Permissions.AUDIT_VIEW,
   ],
   [UserRole.ADMIN]: [
@@ -760,6 +779,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_ORG,
     Permissions.ATTENDANCE_ADJUST,
+    Permissions.REPORT_VIEW,
+    Permissions.REPORT_EXPORT,
     Permissions.AUDIT_VIEW,
   ],
   [UserRole.MANAGER]: [
@@ -787,6 +808,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_ORG,
     Permissions.ATTENDANCE_ADJUST,
+    Permissions.REPORT_VIEW,
+    Permissions.REPORT_EXPORT,
   ],
   [UserRole.SUPERVISOR]: [
     Permissions.MEMBER_PROFILE_VIEW_TEAM,
@@ -809,6 +832,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.LOCATION_EVENT_VIEW,
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_TEAM,
+    Permissions.REPORT_VIEW,
   ],
   [UserRole.FIELD_WORKER]: [
     Permissions.MEMBER_PROFILE_VIEW_OWN,
@@ -1534,5 +1558,420 @@ export function formatShiftDuration(seconds: number | null | undefined): string 
     return `${minutes}m`;
   }
   return `${hours}h ${minutes}m`;
+}
+
+// =============================================================================
+// 13. REPORTING & EXPORTS DOMAIN (PHASE 08)
+// =============================================================================
+
+export enum ReportType {
+  TASKS = 'TASKS',
+  VISITS = 'VISITS',
+  ATTENDANCE = 'ATTENDANCE',
+  WORKFORCE = 'WORKFORCE',
+}
+
+export enum ExportFormat {
+  CSV = 'CSV',
+  JSON = 'JSON',
+}
+
+export interface ReportFilterParams {
+  startDate?: string;
+  endDate?: string;
+  userId?: UserId;
+  teamId?: TeamId;
+  locationId?: LocationId;
+  status?: string;
+  priority?: TaskPriority;
+  verificationResult?: LocationVerificationResult;
+  isAdjusted?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface TaskReportRow {
+  id: TaskId;
+  title: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assigneeName?: string;
+  assigneeEmail?: string;
+  teamName?: string;
+  locationName?: string;
+  dueAt?: IsoDateTime | null;
+  completedAt?: IsoDateTime | null;
+  checklistTotal: number;
+  checklistCompleted: number;
+  createdAt: IsoDateTime;
+}
+
+export interface TaskReportSummary {
+  totalTasks: number;
+  completedTasks: number;
+  completionRatePercentage: number;
+  inProgressTasks: number;
+  overdueTasks: number;
+  blockedTasks: number;
+}
+
+export interface TaskReportData {
+  summary: TaskReportSummary;
+  rows: TaskReportRow[];
+  totalRows: number;
+}
+
+export interface VisitReportRow {
+  id: VisitId;
+  locationName: string;
+  workerName: string;
+  workerEmail?: string;
+  scheduledStart: IsoDateTime;
+  scheduledEnd?: IsoDateTime | null;
+  checkedInAt?: IsoDateTime | null;
+  checkedOutAt?: IsoDateTime | null;
+  verificationResult?: LocationVerificationResult | null;
+  proofsCount: number;
+  status: VisitStatus;
+}
+
+export interface VisitReportSummary {
+  totalScheduled: number;
+  completedVisits: number;
+  onTimeCheckInRatePercentage: number;
+  geofenceVerificationRatePercentage: number;
+  missedVisits: number;
+}
+
+export interface VisitReportData {
+  summary: VisitReportSummary;
+  rows: VisitReportRow[];
+  totalRows: number;
+}
+
+export interface AttendanceReportRow {
+  id: AttendanceId;
+  date: string;
+  workerName: string;
+  workerEmail?: string;
+  checkInAt: IsoDateTime;
+  checkOutAt?: IsoDateTime | null;
+  durationSeconds: number;
+  status: AttendanceStatus;
+  isManuallyAdjusted: boolean;
+  adjustmentReason?: string | null;
+}
+
+export interface AttendanceReportSummary {
+  totalShifts: number;
+  completedShifts: number;
+  totalDutyHours: number;
+  manualAdjustmentRatePercentage: number;
+}
+
+export interface AttendanceReportData {
+  summary: AttendanceReportSummary;
+  rows: AttendanceReportRow[];
+  totalRows: number;
+}
+
+export interface WorkforceReportRow {
+  userId: UserId;
+  workerName: string;
+  workerEmail: string;
+  role: UserRole;
+  teamName?: string;
+  assignedTasksCount: number;
+  completedTasksCount: number;
+  scheduledVisitsCount: number;
+  completedVisitsCount: number;
+  completedShiftsCount: number;
+  totalActivitiesCount: number;
+}
+
+export interface WorkforceReportSummary {
+  activeWorkersCount: number;
+  totalTasksHandled: number;
+  totalVisitsDispatched: number;
+  totalRecordedActivities: number;
+}
+
+export interface WorkforceReportData {
+  summary: WorkforceReportSummary;
+  rows: WorkforceReportRow[];
+  totalRows: number;
+}
+
+export interface ReportAuditLog {
+  id: UUID;
+  organizationId: TenantId;
+  userId: UserId;
+  reportType: ReportType;
+  format: ExportFormat;
+  filterParams: Record<string, unknown>;
+  rowCount: number;
+  exportedAt: IsoDateTime;
+}
+
+// =============================================================================
+// 14. SAAS SUBSCRIPTIONS & BILLING DOMAIN (PHASE 08)
+// =============================================================================
+
+export enum SubscriptionPlan {
+  FREE = 'FREE',
+  STARTER = 'STARTER',
+  GROWTH = 'GROWTH',
+  BUSINESS = 'BUSINESS',
+}
+
+export enum SubscriptionStatus {
+  TRIALING = 'TRIALING',
+  ACTIVE = 'ACTIVE',
+  PAST_DUE = 'PAST_DUE',
+  CANCELED = 'CANCELED',
+  EXPIRED = 'EXPIRED',
+  INCOMPLETE = 'INCOMPLETE',
+  PAUSED = 'PAUSED',
+}
+
+export enum BillingProviderType {
+  MOCK = 'MOCK',
+  STRIPE = 'STRIPE',
+  RAZORPAY = 'RAZORPAY',
+}
+
+export enum BillingInterval {
+  MONTH = 'MONTH',
+  YEAR = 'YEAR',
+}
+
+export interface PlanEntitlements {
+  readonly maxWorkers: number;
+  readonly maxLocations: number;
+  readonly maxMonthlyVisits: number;
+  readonly maxMonthlyExports: number;
+  readonly reportingEnabled: boolean;
+  readonly advancedReporting: boolean;
+  readonly auditExports: boolean;
+}
+
+export interface PlanConfiguration {
+  readonly id: SubscriptionPlan;
+  readonly name: string;
+  readonly description: string;
+  readonly monthlyPriceUsd: number;
+  readonly annualPriceUsd: number;
+  readonly entitlements: PlanEntitlements;
+}
+
+export const PLANS: Record<SubscriptionPlan, PlanConfiguration> = {
+  [SubscriptionPlan.FREE]: {
+    id: SubscriptionPlan.FREE,
+    name: 'Free Trial',
+    description: 'Evaluation and test access for small pilot teams.',
+    monthlyPriceUsd: 0,
+    annualPriceUsd: 0,
+    entitlements: {
+      maxWorkers: 3,
+      maxLocations: 5,
+      maxMonthlyVisits: 50,
+      maxMonthlyExports: 5,
+      reportingEnabled: true,
+      advancedReporting: false,
+      auditExports: false,
+    },
+  },
+  [SubscriptionPlan.STARTER]: {
+    id: SubscriptionPlan.STARTER,
+    name: 'Starter',
+    description: 'Essential field force dispatch and task management for small crews.',
+    monthlyPriceUsd: 29,
+    annualPriceUsd: 290,
+    entitlements: {
+      maxWorkers: 10,
+      maxLocations: 25,
+      maxMonthlyVisits: 300,
+      maxMonthlyExports: 50,
+      reportingEnabled: true,
+      advancedReporting: false,
+      auditExports: false,
+    },
+  },
+  [SubscriptionPlan.GROWTH]: {
+    id: SubscriptionPlan.GROWTH,
+    name: 'Growth',
+    description: 'Scalable operational tracking with advanced reporting for expanding teams.',
+    monthlyPriceUsd: 79,
+    annualPriceUsd: 790,
+    entitlements: {
+      maxWorkers: 30,
+      maxLocations: 100,
+      maxMonthlyVisits: 1500,
+      maxMonthlyExports: 200,
+      reportingEnabled: true,
+      advancedReporting: true,
+      auditExports: false,
+    },
+  },
+  [SubscriptionPlan.BUSINESS]: {
+    id: SubscriptionPlan.BUSINESS,
+    name: 'Business',
+    description: 'High-volume field operations with maximum capacity and audit compliance.',
+    monthlyPriceUsd: 199,
+    annualPriceUsd: 1990,
+    entitlements: {
+      maxWorkers: 100,
+      maxLocations: 500,
+      maxMonthlyVisits: 10000,
+      maxMonthlyExports: 1000,
+      reportingEnabled: true,
+      advancedReporting: true,
+      auditExports: true,
+    },
+  },
+};
+
+export interface BillingAccount {
+  id: UUID;
+  organizationId: TenantId;
+  provider: BillingProviderType;
+  providerCustomerId: string;
+  billingEmail: string;
+  currency: string;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface Subscription {
+  id: UUID;
+  organizationId: TenantId;
+  billingAccountId?: UUID | null;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  providerSubscriptionId?: string | null;
+  billingInterval: BillingInterval;
+  currentPeriodStart: IsoDateTime;
+  currentPeriodEnd: IsoDateTime;
+  cancelAtPeriodEnd: boolean;
+  canceledAt?: IsoDateTime | null;
+  trialEnd?: IsoDateTime | null;
+  gracePeriodEnd?: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface UsageCounter {
+  id: UUID;
+  organizationId: TenantId;
+  metric: string;
+  periodStart: IsoDateTime;
+  periodEnd: IsoDateTime;
+  currentUsage: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface BillingEvent {
+  id: UUID;
+  organizationId?: TenantId | null;
+  provider: BillingProviderType;
+  providerEventId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  processed: boolean;
+  processedAt?: IsoDateTime | null;
+  error?: string | null;
+  createdAt: IsoDateTime;
+}
+
+export interface BillingOverview {
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  billingInterval: BillingInterval;
+  currentPeriodStart: IsoDateTime;
+  currentPeriodEnd: IsoDateTime;
+  cancelAtPeriodEnd: boolean;
+  gracePeriodEnd?: IsoDateTime | null;
+  entitlements: PlanEntitlements;
+  usage: {
+    workers: { current: number; limit: number };
+    locations: { current: number; limit: number };
+    monthlyVisits: { current: number; limit: number };
+    monthlyExports: { current: number; limit: number };
+  };
+}
+
+export interface CreateCheckoutSessionParams {
+  organizationId: TenantId;
+  plan: SubscriptionPlan;
+  billingInterval: BillingInterval;
+  successUrl: string;
+  cancelUrl: string;
+  userEmail: string;
+}
+
+export interface CheckoutSessionResult {
+  sessionId: string;
+  checkoutUrl: string;
+}
+
+export interface CreatePortalSessionParams {
+  organizationId: TenantId;
+  returnUrl: string;
+}
+
+export interface PortalSessionResult {
+  portalUrl: string;
+}
+
+export interface CustomerBillingInfo {
+  billingEmail?: string;
+  name?: string;
+  phone?: string;
+}
+
+/**
+ * Checks whether a subscription is actively entitled to service.
+ * Both ACTIVE and TRIALING grant standard operational service.
+ * PAST_DUE grants service only during the grace period.
+ */
+export function isSubscriptionEntitled(subscription: {
+  status: SubscriptionStatus;
+  gracePeriodEnd?: string | null;
+}, now: Date = new Date()): boolean {
+  if (subscription.status === SubscriptionStatus.ACTIVE || subscription.status === SubscriptionStatus.TRIALING) {
+    return true;
+  }
+  if (subscription.status === SubscriptionStatus.PAST_DUE && subscription.gracePeriodEnd) {
+    return new Date(subscription.gracePeriodEnd).getTime() > now.getTime();
+  }
+  return false;
+}
+
+/**
+ * Checks whether an organization is currently within its past-due grace period.
+ */
+export function isWithinGracePeriod(subscription: {
+  status: SubscriptionStatus;
+  gracePeriodEnd?: string | null;
+}, now: Date = new Date()): boolean {
+  if (subscription.status !== SubscriptionStatus.PAST_DUE || !subscription.gracePeriodEnd) {
+    return false;
+  }
+  return new Date(subscription.gracePeriodEnd).getTime() > now.getTime();
+}
+
+/**
+ * Retrieves the plan configuration and entitlements for a given plan tier.
+ */
+export function getPlanConfiguration(plan: SubscriptionPlan): PlanConfiguration {
+  return PLANS[plan] ?? PLANS[SubscriptionPlan.FREE];
+}
+
+/**
+ * Retrieves entitlements for a given plan tier.
+ */
+export function getPlanEntitlements(plan: SubscriptionPlan): PlanEntitlements {
+  return getPlanConfiguration(plan).entitlements;
 }
 
