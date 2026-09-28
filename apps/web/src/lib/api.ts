@@ -1,7 +1,23 @@
-import { FieldOpsApiClient } from '@fieldops/api';
+import {
+  FieldOpsApiClient,
+  AuthService,
+  OrganizationService,
+  MembershipService,
+  ProfileService,
+} from '@fieldops/api';
 import { loadClientConfig } from '@fieldops/config';
 
 let clientInstance: FieldOpsApiClient | null = null;
+let currentAccessToken: string | null = null;
+let currentTenantId: string | null = null;
+
+export function setApiAuthToken(token: string | null): void {
+  currentAccessToken = token;
+}
+
+export function setApiTenantId(tenantId: string | null): void {
+  currentTenantId = tenantId;
+}
 
 export function getApiClient(): FieldOpsApiClient {
   if (!clientInstance) {
@@ -15,12 +31,26 @@ export function getApiClient(): FieldOpsApiClient {
 
     clientInstance = new FieldOpsApiClient({
       baseUrl: config.apiUrl,
-      getAccessToken: async () => {
-        // Will integrate with Supabase session in Phase 03
-        return null;
-      },
+      getAccessToken: async () => currentAccessToken,
+      getTenantId: () => currentTenantId,
     });
   }
 
   return clientInstance;
+}
+
+export function getAuthService(): AuthService {
+  return new AuthService(getApiClient());
+}
+
+export function getOrganizationService(): OrganizationService {
+  return new OrganizationService(getApiClient());
+}
+
+export function getMembershipService(): MembershipService {
+  return new MembershipService(getApiClient());
+}
+
+export function getProfileService(): ProfileService {
+  return new ProfileService(getApiClient());
 }

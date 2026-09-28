@@ -10,8 +10,8 @@ void main() {
       ),
     );
 
-    // Verify shell screen title and status text render
-    expect(find.text('FieldOps Mobile Shell'), findsOneWidget);
-    expect(find.text('Phase 02 Architecture Active'), findsOneWidget);
+    // Verify shell screen title and Phase 03 status text render
+    expect(find.text('FieldOps Mobile'), findsOneWidget);
+    expect(find.text('Phase 03 Access Control Active'), findsOneWidget);
   });
 }

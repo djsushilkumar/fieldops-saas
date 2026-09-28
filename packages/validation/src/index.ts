@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import {
   UserRole,
+  MembershipStatus,
+  InvitationStatus,
+  AuthState,
   Priority,
   TaskStatus,
   VisitStatus,
@@ -36,6 +39,42 @@ export const isoDateTimeSchema = z
   .datetime({ offset: true, message: 'Timestamp must be an ISO-8601 formatted date string' })
   .transform((val) => val as IsoDateTime);
 
+/**
+ * Strict slug validation: 3-63 chars, lowercase alphanumeric and single hyphens.
+ */
+export const slugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, 'Slug must be at least 3 characters long')
+  .max(63, 'Slug cannot exceed 63 characters')
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Slug must consist of lowercase letters, numbers, and single hyphens without leading or trailing hyphens');
+
+/**
+ * Strict email validation.
+ */
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('Must be a valid email address');
+
+/**
+ * Production SaaS password policy:
+ * - At least 8 characters
+ * - At least 1 lowercase letter
+ * - At least 1 uppercase letter
+ * - At least 1 digit
+ * - At least 1 special symbol
+ */
+export const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters long')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one digit')
+  .regex(/[^a-zA-Z0-9]/, 'Password must contain at least one special character');
+
 export const paginationParamsSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -47,6 +86,9 @@ export const paginationParamsSchema = z.object({
 // =============================================================================
 
 export const userRoleSchema = z.nativeEnum(UserRole);
+export const membershipStatusSchema = z.nativeEnum(MembershipStatus);
+export const invitationStatusSchema = z.nativeEnum(InvitationStatus);
+export const authStateSchema = z.nativeEnum(AuthState);
 export const prioritySchema = z.nativeEnum(Priority);
 export const taskStatusSchema = z.nativeEnum(TaskStatus);
 export const visitStatusSchema = z.nativeEnum(VisitStatus);
@@ -55,7 +97,7 @@ export const checkInResultSchema = z.nativeEnum(CheckInResult);
 export const errorCodeSchema = z.nativeEnum(ErrorCode);
 
 // =============================================================================
-// 3. API ERROR ENVELOPE SCHEMA
+// 3. API ENVELOPE SCHEMAS
 // =============================================================================
 
 export const apiErrorDetailSchema = z.object({
@@ -78,7 +120,86 @@ export const apiSuccessResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) 
   });
 
 // =============================================================================
-// 4. CONTEXT SCHEMAS
+// 4. AUTHENTICATION & IDENTITY SCHEMAS
+// =============================================================================
+
+export const signUpSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100),
+  organizationName: z.string().trim().min(2, 'Organization name must be at least 2 characters').max(100).optional(),
+  organizationSlug: slugSchema.optional(),
+});
+
+export const signInSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, 'Password is required'),
+});
+
+export const passwordResetRequestSchema = z.object({
+  email: emailSchema,
+});
+
+export const updatePasswordSchema = z.object({
+  currentPassword: z.string().min(1).optional(),
+  newPassword: passwordSchema,
+});
+
+export const updateProfileSchema = z.object({
+  fullName: z.string().trim().min(2).max(100).optional(),
+  displayName: z.string().trim().max(50).optional(),
+  phone: z.string().trim().max(30).optional(),
+  timezone: z.string().trim().max(100).optional(),
+  avatarUrl: z.string().url('Must be a valid URL').optional(),
+});
+
+// =============================================================================
+// 5. ORGANIZATION & MEMBERSHIP SCHEMAS
+// =============================================================================
+
+export const organizationSettingsSchema = z.object({
+  allowedRadiusMeters: z.number().int().positive().default(100),
+  timezone: z.string().default('UTC'),
+  requirePhotoProof: z.boolean().default(true),
+  requireSignature: z.boolean().default(true),
+}).passthrough();
+
+export const createOrganizationSchema = z.object({
+  name: z.string().trim().min(2, 'Organization name must be at least 2 characters').max(100),
+  slug: slugSchema,
+  settings: organizationSettingsSchema.optional(),
+});
+
+export const updateOrganizationSchema = z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  settings: organizationSettingsSchema.partial().optional(),
+});
+
+export const inviteMemberSchema = z.object({
+  email: emailSchema,
+  role: userRoleSchema,
+});
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().trim().min(16, 'Invalid invitation token format'),
+  fullName: z.string().trim().min(2).max(100).optional(),
+  password: passwordSchema.optional(),
+});
+
+export const updateMemberRoleSchema = z.object({
+  role: userRoleSchema,
+});
+
+export const updateMemberStatusSchema = z.object({
+  status: z.enum([MembershipStatus.ACTIVE, MembershipStatus.SUSPENDED, MembershipStatus.REMOVED]),
+});
+
+export const switchOrganizationSchema = z.object({
+  organizationId: tenantIdSchema,
+});
+
+// =============================================================================
+// 6. CONTEXT SCHEMAS
 // =============================================================================
 
 export const tenantContextSchema = z.object({

@@ -4,6 +4,17 @@ import {
   ApiErrorDetail,
   ErrorCode,
   RequestId,
+  UUID,
+  TenantId,
+  UserId,
+  UserRole,
+  MembershipStatus,
+  UserProfile,
+  Organization,
+  Membership,
+  OrganizationInvitation,
+  AuthSession,
+  AuthTokens,
 } from '@fieldops/types';
 import { z } from 'zod';
 
@@ -179,6 +190,15 @@ export class FieldOpsApiClient {
     return this.request<T>('POST', path, body, schema, options);
   }
 
+  public async patch<T>(
+    path: string,
+    body?: unknown,
+    schema?: z.ZodType<T>,
+    options?: RequestOptions
+  ): Promise<T> {
+    return this.request<T>('PATCH', path, body, schema, options);
+  }
+
   public async put<T>(
     path: string,
     body?: unknown,
@@ -297,5 +317,174 @@ export class FieldOpsApiClient {
     }
 
     return executeWithRetry(executeCall, this.maxRetries);
+  }
+}
+
+// =============================================================================
+// 5. PHASE 03 DOMAIN SERVICES
+// =============================================================================
+
+export interface SignInCredentials {
+  readonly email: string;
+  readonly password: string;
+}
+
+export interface SignUpPayload {
+  readonly email: string;
+  readonly password: string;
+  readonly fullName: string;
+  readonly organizationName?: string;
+  readonly organizationSlug?: string;
+}
+
+export interface CreateOrganizationPayload {
+  readonly name: string;
+  readonly slug: string;
+  readonly settings?: Record<string, unknown>;
+}
+
+export interface InviteMemberPayload {
+  readonly email: string;
+  readonly role: UserRole;
+}
+
+export interface AcceptInvitationPayload {
+  readonly token: string;
+  readonly fullName?: string;
+  readonly password?: string;
+}
+
+/**
+ * Authentication and identity service.
+ */
+export class AuthService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async signIn(credentials: SignInCredentials): Promise<AuthSession> {
+    return this.client.post<AuthSession>('/api/v1/auth/login', credentials);
+  }
+
+  public async signUp(payload: SignUpPayload): Promise<AuthSession> {
+    return this.client.post<AuthSession>('/api/v1/auth/signup', payload);
+  }
+
+  public async signOut(): Promise<{ success: true }> {
+    return this.client.post<{ success: true }>('/api/v1/auth/logout');
+  }
+
+  public async getSession(): Promise<AuthSession | null> {
+    try {
+      return await this.client.get<AuthSession>('/api/v1/auth/session');
+    } catch (err) {
+      if (err instanceof ApiClientError && err.status === 401) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  public async requestPasswordReset(email: string): Promise<{ success: true }> {
+    return this.client.post<{ success: true }>('/api/v1/auth/forgot-password', { email });
+  }
+}
+
+/**
+ * Organization and tenant management service.
+ */
+export class OrganizationService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async listOrganizations(): Promise<readonly Organization[]> {
+    return this.client.get<readonly Organization[]>('/api/v1/organizations');
+  }
+
+  public async getOrganization(id: TenantId): Promise<Organization> {
+    return this.client.get<Organization>(`/api/v1/organizations/${id}`);
+  }
+
+  public async createOrganization(
+    payload: CreateOrganizationPayload
+  ): Promise<{ organization: Organization; membership: Membership }> {
+    return this.client.post<{ organization: Organization; membership: Membership }>(
+      '/api/v1/organizations',
+      payload
+    );
+  }
+
+  public async updateOrganization(
+    id: TenantId,
+    update: Partial<Organization>
+  ): Promise<Organization> {
+    return this.client.patch<Organization>(`/api/v1/organizations/${id}`, update);
+  }
+}
+
+/**
+ * Membership and invitation service.
+ */
+export class MembershipService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async listMembers(organizationId: TenantId): Promise<readonly Membership[]> {
+    return this.client.get<readonly Membership[]>(`/api/v1/organizations/${organizationId}/members`);
+  }
+
+  public async inviteMember(
+    organizationId: TenantId,
+    payload: InviteMemberPayload
+  ): Promise<OrganizationInvitation> {
+    return this.client.post<OrganizationInvitation>(
+      `/api/v1/organizations/${organizationId}/invitations`,
+      payload
+    );
+  }
+
+  public async acceptInvitation(
+    payload: AcceptInvitationPayload
+  ): Promise<{ membership: Membership }> {
+    return this.client.post<{ membership: Membership }>('/api/v1/invitations/accept', payload);
+  }
+
+  public async updateMemberRole(
+    organizationId: TenantId,
+    memberId: UUID,
+    role: UserRole
+  ): Promise<Membership> {
+    return this.client.patch<Membership>(
+      `/api/v1/organizations/${organizationId}/members/${memberId}/role`,
+      { role }
+    );
+  }
+
+  public async updateMemberStatus(
+    organizationId: TenantId,
+    memberId: UUID,
+    status: MembershipStatus
+  ): Promise<Membership> {
+    return this.client.patch<Membership>(
+      `/api/v1/organizations/${organizationId}/members/${memberId}/status`,
+      { status }
+    );
+  }
+
+  public async removeMember(organizationId: TenantId, memberId: UUID): Promise<{ success: true }> {
+    return this.client.delete<{ success: true }>(
+      `/api/v1/organizations/${organizationId}/members/${memberId}`
+    );
+  }
+}
+
+/**
+ * Profile service.
+ */
+export class ProfileService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async getProfile(): Promise<UserProfile> {
+    return this.client.get<UserProfile>('/api/v1/profile');
+  }
+
+  public async updateProfile(update: Partial<UserProfile>): Promise<UserProfile> {
+    return this.client.patch<UserProfile>('/api/v1/profile', update);
   }
 }
