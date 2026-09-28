@@ -61,3 +61,12 @@ class SyncFailure extends Failure {
           code: ErrorCodes.syncError,
         );
 }
+
+class TaskFailure extends Failure {
+  const TaskFailure({
+    required super.message,
+    super.code = ErrorCodes.taskNotFound,
+    super.requestId,
+  });
+}
+

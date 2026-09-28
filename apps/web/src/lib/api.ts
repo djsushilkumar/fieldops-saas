@@ -4,6 +4,8 @@ import {
   OrganizationService,
   MembershipService,
   ProfileService,
+  TaskService,
+  TeamService,
 } from '@fieldops/api';
 import { loadClientConfig } from '@fieldops/config';
 
@@ -54,3 +56,12 @@ export function getMembershipService(): MembershipService {
 export function getProfileService(): ProfileService {
   return new ProfileService(getApiClient());
 }
+
+export function getTaskService(): TaskService {
+  return new TaskService(getApiClient());
+}
+
+export function getTeamService(): TeamService {
+  return new TeamService(getApiClient());
+}
+

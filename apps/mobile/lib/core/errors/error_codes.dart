@@ -12,4 +12,10 @@ class ErrorCodes {
   static const String tenantNotFound = 'TENANT_NOT_FOUND';
   static const String crossTenantForbidden = 'CROSS_TENANT_FORBIDDEN';
   static const String geofenceException = 'GEOFENCE_EXCEPTION';
+  static const String taskNotFound = 'TASK_NOT_FOUND';
+  static const String taskAccessDenied = 'TASK_ACCESS_DENIED';
+  static const String taskInvalidStatusTransition = 'TASK_INVALID_STATUS_TRANSITION';
+  static const String taskInvalidAssignee = 'TASK_INVALID_ASSIGNEE';
+  static const String taskConflict = 'TASK_CONFLICT';
+  static const String taskChecklistIncomplete = 'TASK_CHECKLIST_INCOMPLETE';
 }

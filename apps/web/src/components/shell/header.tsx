@@ -36,6 +36,9 @@ export function AppHeader() {
               <Link href="/dashboard" className="hover:text-primary transition-colors">
                 Dashboard
               </Link>
+              <Link href="/tasks" className="hover:text-primary transition-colors">
+                Tasks
+              </Link>
               {canManageMembers && (
                 <Link href="/organization/members" className="hover:text-primary transition-colors">
                   Members & Access

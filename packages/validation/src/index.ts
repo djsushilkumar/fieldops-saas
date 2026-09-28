@@ -13,6 +13,7 @@ import {
   UUID,
   TenantId,
   UserId,
+  TeamId,
   IsoDateTime,
 } from '@fieldops/types';
 
@@ -30,6 +31,7 @@ export const uuidSchema = z
 
 export const tenantIdSchema = uuidSchema.transform((val) => val as unknown as TenantId);
 export const userIdSchema = uuidSchema.transform((val) => val as unknown as UserId);
+export const teamIdSchema = uuidSchema.transform((val) => val as unknown as TeamId);
 
 /**
  * Validates ISO-8601 UTC timestamp format.
@@ -199,7 +201,91 @@ export const switchOrganizationSchema = z.object({
 });
 
 // =============================================================================
-// 6. CONTEXT SCHEMAS
+// 6. PHASE 04 TASK MANAGEMENT SCHEMAS
+// =============================================================================
+
+export const createChecklistItemSchema = z.object({
+  title: z.string().trim().min(1, 'Checklist item title cannot be empty').max(255),
+  isRequired: z.boolean().default(true),
+});
+
+export const toggleChecklistItemSchema = z.object({
+  isCompleted: z.boolean(),
+});
+
+export const createTaskSchema = z.object({
+  title: z.string().trim().min(3, 'Title must be at least 3 characters long').max(255),
+  description: z.string().trim().max(10000).optional(),
+  priority: prioritySchema.default(Priority.MEDIUM),
+  assignedTo: userIdSchema.optional(),
+  assignedTeam: teamIdSchema.optional(),
+  dueAt: isoDateTimeSchema.optional(),
+  checklists: z.array(createChecklistItemSchema).optional(),
+});
+
+export const updateTaskSchema = z.object({
+  title: z.string().trim().min(3).max(255).optional(),
+  description: z.string().trim().max(10000).optional(),
+  priority: prioritySchema.optional(),
+  assignedTo: userIdSchema.nullable().optional(),
+  assignedTeam: teamIdSchema.nullable().optional(),
+  dueAt: isoDateTimeSchema.nullable().optional(),
+  version: z.number().int().positive('Version is required for optimistic concurrency'),
+});
+
+export const assignTaskSchema = z.object({
+  assignedTo: userIdSchema.optional(),
+  assignedTeam: teamIdSchema.optional(),
+}).refine(
+  (data) => data.assignedTo !== undefined || data.assignedTeam !== undefined,
+  { message: 'Must specify either an assignee or an assigned team' }
+);
+
+export const transitionTaskStatusSchema = z.object({
+  status: taskStatusSchema,
+  blockedReason: z.string().trim().max(1000).optional(),
+  reopenReason: z.string().trim().max(1000).optional(),
+  expectedVersion: z.number().int().positive().optional(),
+});
+
+export const createAttachmentMetadataSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: z
+    .string()
+    .regex(
+      /^(image\/(jpeg|png|webp|gif)|application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)|text\/plain)$/,
+      'Allowed file types: JPG, PNG, WEBP, GIF, PDF, DOC, DOCX, TXT'
+    ),
+  fileSizeBytes: z
+    .number()
+    .int()
+    .positive()
+    .max(25 * 1024 * 1024, 'Max attachment file size is 25MB'),
+  storagePath: z.string().trim().min(1),
+});
+
+export const createCommentSchema = z.object({
+  content: z.string().trim().min(1, 'Comment cannot be empty').max(5000),
+});
+
+export const taskFilterSchema = z.object({
+  status: z.union([taskStatusSchema, z.array(taskStatusSchema)]).optional(),
+  priority: z.union([prioritySchema, z.array(prioritySchema)]).optional(),
+  assignedTo: userIdSchema.optional(),
+  assignedTeam: teamIdSchema.optional(),
+  isOverdue: z.coerce.boolean().optional(),
+  search: z.string().trim().max(100).optional(),
+  fromDate: isoDateTimeSchema.optional(),
+  toDate: isoDateTimeSchema.optional(),
+});
+
+export const taskSortSchema = z.object({
+  field: z.enum(['dueAt', 'createdAt', 'priority', 'updatedAt', 'title']).default('createdAt'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+});
+
+// =============================================================================
+// 7. CONTEXT SCHEMAS
 // =============================================================================
 
 export const tenantContextSchema = z.object({

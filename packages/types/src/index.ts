@@ -1,7 +1,7 @@
 /**
  * @fieldops/types
- * Core shared types, domain primitives, and access control matrix for FieldOps SaaS.
- * Phase 03 Identity, Multi-Tenancy & Access Control.
+ * Core shared types, domain primitives, access control, and task management engine for FieldOps SaaS.
+ * Phase 04 Task Management Engine.
  */
 
 // =============================================================================
@@ -200,7 +200,115 @@ export interface AuthSession {
 }
 
 // =============================================================================
-// 5. ERROR TAXONOMY
+// 5. DOMAIN ENTITIES (PHASE 04 TASK MANAGEMENT ENGINE)
+// =============================================================================
+
+export interface Team {
+  readonly id: TeamId;
+  readonly organizationId: TenantId;
+  readonly name: string;
+  readonly description?: string;
+  readonly createdAt: IsoDateTime;
+  readonly updatedAt: IsoDateTime;
+}
+
+export interface TeamMember {
+  readonly id: UUID;
+  readonly organizationId: TenantId;
+  readonly teamId: TeamId;
+  readonly userId: UserId;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface TaskChecklistItem {
+  readonly id: UUID;
+  readonly taskId: TaskId;
+  readonly organizationId: TenantId;
+  readonly title: string;
+  readonly position: number;
+  readonly isRequired: boolean;
+  readonly isCompleted: boolean;
+  readonly completedAt?: IsoDateTime;
+  readonly completedBy?: UserId;
+  readonly createdAt: IsoDateTime;
+  readonly updatedAt: IsoDateTime;
+}
+
+export interface TaskAttachment {
+  readonly id: UUID;
+  readonly taskId: TaskId;
+  readonly organizationId: TenantId;
+  readonly storagePath: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly fileSizeBytes: number;
+  readonly createdBy: UserId;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface TaskComment {
+  readonly id: UUID;
+  readonly taskId: TaskId;
+  readonly organizationId: TenantId;
+  readonly authorId: UserId;
+  readonly content: string;
+  readonly author?: UserProfile;
+  readonly createdAt: IsoDateTime;
+  readonly updatedAt: IsoDateTime;
+}
+
+export interface TaskActivity {
+  readonly id: UUID;
+  readonly taskId: TaskId;
+  readonly organizationId: TenantId;
+  readonly actorId: UserId;
+  readonly action: string;
+  readonly details: Record<string, unknown>;
+  readonly actor?: UserProfile;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface Task {
+  readonly id: TaskId;
+  readonly organizationId: TenantId;
+  readonly title: string;
+  readonly description?: string;
+  readonly status: TaskStatus;
+  readonly priority: Priority;
+  readonly createdBy: UserId;
+  readonly assignedTo?: UserId;
+  readonly assignedTeam?: TeamId;
+  readonly dueAt?: IsoDateTime;
+  readonly blockedReason?: string;
+  readonly version: number;
+  readonly createdAt: IsoDateTime;
+  readonly updatedAt: IsoDateTime;
+  readonly checklists?: readonly TaskChecklistItem[];
+  readonly assignee?: UserProfile;
+  readonly team?: Team;
+}
+
+export interface TaskFilterParams {
+  readonly status?: TaskStatus | readonly TaskStatus[];
+  readonly priority?: Priority | readonly Priority[];
+  readonly assignedTo?: UserId;
+  readonly assignedTeam?: TeamId;
+  readonly isOverdue?: boolean;
+  readonly search?: string;
+  readonly fromDate?: IsoDateTime;
+  readonly toDate?: IsoDateTime;
+}
+
+export type TaskSortField = 'dueAt' | 'createdAt' | 'priority' | 'updatedAt' | 'title';
+export type TaskSortOrder = 'asc' | 'desc';
+
+export interface TaskSortParams {
+  readonly field: TaskSortField;
+  readonly order: TaskSortOrder;
+}
+
+// =============================================================================
+// 6. ERROR TAXONOMY
 // =============================================================================
 
 export enum ErrorCode {
@@ -220,6 +328,14 @@ export enum ErrorCode {
   LAST_OWNER_PROTECTION = 'LAST_OWNER_PROTECTION',
   INVITATION_EXPIRED = 'INVITATION_EXPIRED',
   INVITATION_INVALID = 'INVITATION_INVALID',
+  TASK_NOT_FOUND = 'TASK_NOT_FOUND',
+  TASK_ACCESS_DENIED = 'TASK_ACCESS_DENIED',
+  TASK_INVALID_STATUS_TRANSITION = 'TASK_INVALID_STATUS_TRANSITION',
+  TASK_INVALID_ASSIGNEE = 'TASK_INVALID_ASSIGNEE',
+  TASK_INVALID_TEAM = 'TASK_INVALID_TEAM',
+  TASK_CONFLICT = 'TASK_CONFLICT',
+  TASK_CHECKLIST_INCOMPLETE = 'TASK_CHECKLIST_INCOMPLETE',
+  TASK_ATTACHMENT_INVALID = 'TASK_ATTACHMENT_INVALID',
 }
 
 export interface ApiErrorDetail {
@@ -235,7 +351,7 @@ export interface ApiErrorResponse {
 }
 
 // =============================================================================
-// 6. API ENVELOPES & PAGINATION
+// 7. API ENVELOPES & PAGINATION
 // =============================================================================
 
 export interface ApiSuccessResponse<T> {
@@ -268,7 +384,7 @@ export interface PaginatedData<T> {
 export type PaginatedResponse<T> = ApiSuccessResponse<PaginatedData<T>>;
 
 // =============================================================================
-// 7. TENANT & AUTH CONTEXT
+// 8. TENANT & AUTH CONTEXT
 // =============================================================================
 
 export interface TenantContext {
@@ -286,7 +402,7 @@ export interface AuditContext {
 }
 
 // =============================================================================
-// 8. OFFLINE MUTATION ENVELOPE
+// 9. OFFLINE MUTATION ENVELOPE
 // =============================================================================
 
 export interface MutationEnvelope<TPayload = unknown> {
@@ -303,8 +419,24 @@ export interface MutationEnvelope<TPayload = unknown> {
   readonly status: SyncStatus;
 }
 
+export type OfflineMutation<TPayload = unknown> = MutationEnvelope<TPayload>;
+
+export interface OfflineMutationResult {
+  readonly mutationId: MutationId;
+  readonly idempotencyKey: string;
+  readonly status: 'APPLIED' | 'DEDUPLICATED' | 'CONFLICT' | 'REJECTED';
+  readonly error?: ApiErrorDetail;
+  readonly entity?: unknown;
+}
+
+export interface OfflineSyncResponse {
+  readonly processed: number;
+  readonly results: readonly OfflineMutationResult[];
+}
+
+
 // =============================================================================
-// 9. PERMISSIONS & ROLE CAPABILITY MATRIX
+// 10. PERMISSIONS & ROLE CAPABILITY MATRIX
 // =============================================================================
 
 export const Permissions = {
@@ -559,4 +691,177 @@ export function can(
   }
 
   return true;
+}
+
+// =============================================================================
+// 11. TASK STATE MACHINE EVALUATOR & POLICIES
+// =============================================================================
+
+export interface TaskTransitionOptions {
+  readonly hasAssignee?: boolean;
+  readonly incompleteRequiredChecklists?: number;
+  readonly blockedReason?: string;
+  readonly reopenReason?: string;
+  readonly isAssignee?: boolean;
+}
+
+/**
+ * Validates whether a requested task state transition is legal per PRD Section 3.
+ */
+export function isValidTaskTransition(
+  currentStatus: TaskStatus,
+  targetStatus: TaskStatus,
+  role: UserRole,
+  options?: TaskTransitionOptions
+): { valid: boolean; reason?: string } {
+  if (currentStatus === targetStatus) {
+    return { valid: true };
+  }
+
+  // Canceled is terminal
+  if (currentStatus === TaskStatus.CANCELED) {
+    return {
+      valid: false,
+      reason: 'CANCELED is a terminal state. Task cannot transition to any other state.',
+    };
+  }
+
+  // Cancellation rule: Only Owner, Admin, Manager, Supervisor can cancel tasks
+  if (targetStatus === TaskStatus.CANCELED) {
+    if (role === UserRole.FIELD_WORKER) {
+      return {
+        valid: false,
+        reason: 'Field Workers cannot cancel tasks. Contact a supervisor or manager.',
+      };
+    }
+    return { valid: true };
+  }
+
+  // Direct transition from DRAFT to COMPLETED is forbidden
+  if (currentStatus === TaskStatus.DRAFT && targetStatus === TaskStatus.COMPLETED) {
+    return {
+      valid: false,
+      reason: 'Direct transition from DRAFT to COMPLETED is forbidden.',
+    };
+  }
+
+  // Transitions from DRAFT
+  if (currentStatus === TaskStatus.DRAFT) {
+    if (targetStatus !== TaskStatus.ASSIGNED) {
+      return {
+        valid: false,
+        reason: `DRAFT can only transition to ASSIGNED or CANCELED (requested: ${targetStatus}).`,
+      };
+    }
+    if (options?.hasAssignee === false) {
+      return {
+        valid: false,
+        reason: 'Assigning a task requires specifying an assignee or a team.',
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from ASSIGNED
+  if (currentStatus === TaskStatus.ASSIGNED) {
+    if (targetStatus !== TaskStatus.ACCEPTED && targetStatus !== TaskStatus.IN_PROGRESS) {
+      return {
+        valid: false,
+        reason: `ASSIGNED can only transition to ACCEPTED or IN_PROGRESS (requested: ${targetStatus}).`,
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from ACCEPTED
+  if (currentStatus === TaskStatus.ACCEPTED) {
+    if (targetStatus !== TaskStatus.IN_PROGRESS) {
+      return {
+        valid: false,
+        reason: `ACCEPTED can only transition to IN_PROGRESS (requested: ${targetStatus}).`,
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from IN_PROGRESS
+  if (currentStatus === TaskStatus.IN_PROGRESS) {
+    if (targetStatus === TaskStatus.BLOCKED) {
+      if (!options?.blockedReason || options.blockedReason.trim().length === 0) {
+        return {
+          valid: false,
+          reason: 'Transitioning to BLOCKED requires a non-empty blocked_reason.',
+        };
+      }
+      return { valid: true };
+    }
+
+    if (targetStatus === TaskStatus.COMPLETED) {
+      if (options?.incompleteRequiredChecklists && options.incompleteRequiredChecklists > 0) {
+        return {
+          valid: false,
+          reason: `Cannot complete task with ${options.incompleteRequiredChecklists} unfinished required checklist items.`,
+        };
+      }
+      return { valid: true };
+    }
+
+    return {
+      valid: false,
+      reason: `IN_PROGRESS can only transition to BLOCKED, COMPLETED, or CANCELED (requested: ${targetStatus}).`,
+    };
+  }
+
+  // Transitions from BLOCKED
+  if (currentStatus === TaskStatus.BLOCKED) {
+    if (targetStatus !== TaskStatus.IN_PROGRESS && targetStatus !== TaskStatus.COMPLETED) {
+      return {
+        valid: false,
+        reason: `BLOCKED can only transition to IN_PROGRESS or COMPLETED (requested: ${targetStatus}).`,
+      };
+    }
+    if (targetStatus === TaskStatus.COMPLETED) {
+      if (options?.incompleteRequiredChecklists && options.incompleteRequiredChecklists > 0) {
+        return {
+          valid: false,
+          reason: `Cannot complete task with ${options.incompleteRequiredChecklists} unfinished required checklist items.`,
+        };
+      }
+    }
+    return { valid: true };
+  }
+
+  // Transitions from COMPLETED (Reopening)
+  if (currentStatus === TaskStatus.COMPLETED) {
+    if (targetStatus !== TaskStatus.IN_PROGRESS) {
+      return {
+        valid: false,
+        reason: `COMPLETED tasks can only be reopened to IN_PROGRESS (requested: ${targetStatus}).`,
+      };
+    }
+    if (role === UserRole.FIELD_WORKER) {
+      return {
+        valid: false,
+        reason: 'Field Workers cannot reopen completed tasks. Reopening requires Supervisor or Manager review.',
+      };
+    }
+    return { valid: true };
+  }
+
+  return { valid: false, reason: `Invalid status transition from ${currentStatus} to ${targetStatus}.` };
+}
+
+/**
+ * Calculates whether a task is overdue based on dueAt and current time in UTC.
+ */
+export function isTaskOverdue(
+  task: { status: TaskStatus; dueAt?: string | null },
+  now: Date = new Date()
+): boolean {
+  if (!task.dueAt) return false;
+  if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.CANCELED) {
+    return false;
+  }
+  const dueTime = new Date(task.dueAt).getTime();
+  return now.getTime() > dueTime;
 }

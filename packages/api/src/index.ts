@@ -7,6 +7,8 @@ import {
   UUID,
   TenantId,
   UserId,
+  TeamId,
+  TaskId,
   UserRole,
   MembershipStatus,
   UserProfile,
@@ -15,8 +17,25 @@ import {
   OrganizationInvitation,
   AuthSession,
   AuthTokens,
+  Team,
+  TeamMember,
+  Task,
+  TaskStatus,
+  Priority,
+  TaskChecklistItem,
+  TaskAttachment,
+  TaskComment,
+  TaskActivity,
+  TaskFilterParams,
+  TaskSortParams,
+  PaginationParams,
+  PaginatedData,
+  IsoDateTime,
+  OfflineMutation,
+  OfflineSyncResponse,
 } from '@fieldops/types';
 import { z } from 'zod';
+
 
 // =============================================================================
 // 1. CLIENT CONTRACT & INTERFACES
@@ -488,3 +507,208 @@ export class ProfileService {
     return this.client.patch<UserProfile>('/api/v1/profile', update);
   }
 }
+
+// =============================================================================
+// 6. PHASE 04 TASK MANAGEMENT SERVICES
+// =============================================================================
+
+export interface CreateTaskPayload {
+  readonly title: string;
+  readonly description?: string;
+  readonly priority?: Priority;
+  readonly assignedTo?: UserId;
+  readonly assignedTeam?: TeamId;
+  readonly dueAt?: IsoDateTime;
+  readonly checklists?: readonly {
+    readonly title: string;
+    readonly isRequired?: boolean;
+  }[];
+}
+
+export interface UpdateTaskPayload {
+  readonly title?: string;
+  readonly description?: string;
+  readonly priority?: Priority;
+  readonly assignedTo?: UserId | null;
+  readonly assignedTeam?: TeamId | null;
+  readonly dueAt?: IsoDateTime | null;
+  readonly version: number;
+}
+
+export interface AssignTaskPayload {
+  readonly assignedTo?: UserId;
+  readonly assignedTeam?: TeamId;
+}
+
+export interface TransitionTaskStatusPayload {
+  readonly status: TaskStatus;
+  readonly blockedReason?: string;
+  readonly reopenReason?: string;
+  readonly expectedVersion?: number;
+}
+
+export interface CreateChecklistItemPayload {
+  readonly title: string;
+  readonly isRequired?: boolean;
+}
+
+export interface CreateAttachmentMetadataPayload {
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly fileSizeBytes: number;
+  readonly storagePath: string;
+}
+
+export interface CreateCommentPayload {
+  readonly content: string;
+}
+
+export class TaskService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async listTasks(
+    filters?: TaskFilterParams,
+    pagination?: PaginationParams,
+    sort?: TaskSortParams
+  ): Promise<PaginatedData<Task>> {
+    const query: Record<string, string | number | boolean | undefined> = {};
+
+    if (filters?.status) {
+      query.status = Array.isArray(filters.status)
+        ? (filters.status as readonly string[]).join(',')
+        : String(filters.status);
+    }
+    if (filters?.priority) {
+      query.priority = Array.isArray(filters.priority)
+        ? (filters.priority as readonly string[]).join(',')
+        : String(filters.priority);
+    }
+    if (filters?.assignedTo) query.assignedTo = filters.assignedTo;
+    if (filters?.assignedTeam) query.assignedTeam = filters.assignedTeam;
+    if (filters?.isOverdue !== undefined) query.isOverdue = filters.isOverdue;
+    if (filters?.search) query.search = filters.search;
+    if (filters?.fromDate) query.fromDate = filters.fromDate;
+    if (filters?.toDate) query.toDate = filters.toDate;
+
+    if (pagination?.page !== undefined) query.page = pagination.page;
+    if (pagination?.pageSize !== undefined) query.pageSize = pagination.pageSize;
+    if (pagination?.cursor) query.cursor = pagination.cursor;
+
+    if (sort?.field) query.sortField = sort.field;
+    if (sort?.order) query.sortOrder = sort.order;
+
+    return this.client.get<PaginatedData<Task>>('/api/v1/tasks', undefined, { query });
+  }
+
+  public async getTask(id: TaskId): Promise<Task> {
+    return this.client.get<Task>(`/api/v1/tasks/${id}`);
+  }
+
+  public async createTask(payload: CreateTaskPayload): Promise<Task> {
+    return this.client.post<Task>('/api/v1/tasks', payload);
+  }
+
+  public async updateTask(id: TaskId, payload: UpdateTaskPayload): Promise<Task> {
+    return this.client.patch<Task>(`/api/v1/tasks/${id}`, payload);
+  }
+
+  public async assignTask(id: TaskId, payload: AssignTaskPayload): Promise<Task> {
+    return this.client.post<Task>(`/api/v1/tasks/${id}/assign`, payload);
+  }
+
+  public async transitionStatus(
+    id: TaskId,
+    payload: TransitionTaskStatusPayload
+  ): Promise<Task> {
+    return this.client.post<Task>(`/api/v1/tasks/${id}/transition`, payload);
+  }
+
+  public async listChecklists(taskId: TaskId): Promise<readonly TaskChecklistItem[]> {
+    return this.client.get<readonly TaskChecklistItem[]>(`/api/v1/tasks/${taskId}/checklists`);
+  }
+
+  public async addChecklistItem(
+    taskId: TaskId,
+    payload: CreateChecklistItemPayload
+  ): Promise<TaskChecklistItem> {
+    return this.client.post<TaskChecklistItem>(`/api/v1/tasks/${taskId}/checklists`, payload);
+  }
+
+  public async toggleChecklistItem(
+    taskId: TaskId,
+    itemId: UUID,
+    isCompleted: boolean
+  ): Promise<TaskChecklistItem> {
+    return this.client.patch<TaskChecklistItem>(
+      `/api/v1/tasks/${taskId}/checklists/${itemId}`,
+      { isCompleted }
+    );
+  }
+
+  public async deleteChecklistItem(
+    taskId: TaskId,
+    itemId: UUID
+  ): Promise<{ success: true }> {
+    return this.client.delete<{ success: true }>(`/api/v1/tasks/${taskId}/checklists/${itemId}`);
+  }
+
+  public async listAttachments(taskId: TaskId): Promise<readonly TaskAttachment[]> {
+    return this.client.get<readonly TaskAttachment[]>(`/api/v1/tasks/${taskId}/attachments`);
+  }
+
+  public async createAttachmentMetadata(
+    taskId: TaskId,
+    payload: CreateAttachmentMetadataPayload
+  ): Promise<TaskAttachment> {
+    return this.client.post<TaskAttachment>(`/api/v1/tasks/${taskId}/attachments`, payload);
+  }
+
+  public async listComments(taskId: TaskId): Promise<readonly TaskComment[]> {
+    return this.client.get<readonly TaskComment[]>(`/api/v1/tasks/${taskId}/comments`);
+  }
+
+  public async addComment(
+    taskId: TaskId,
+    payload: CreateCommentPayload
+  ): Promise<TaskComment> {
+    return this.client.post<TaskComment>(`/api/v1/tasks/${taskId}/comments`, payload);
+  }
+
+  public async listActivities(taskId: TaskId): Promise<readonly TaskActivity[]> {
+    return this.client.get<readonly TaskActivity[]>(`/api/v1/tasks/${taskId}/activities`);
+  }
+
+  public async syncOfflineMutations(
+    mutations: readonly OfflineMutation[]
+  ): Promise<OfflineSyncResponse> {
+    return this.client.post<OfflineSyncResponse>('/api/v1/sync/mutations', { mutations });
+  }
+}
+
+/**
+ * Team and territory management service.
+ */
+export class TeamService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async listTeams(): Promise<readonly Team[]> {
+    return this.client.get<readonly Team[]>('/api/v1/teams');
+  }
+
+  public async getTeam(id: TeamId): Promise<Team> {
+    return this.client.get<Team>(`/api/v1/teams/${id}`);
+  }
+
+  public async createTeam(payload: { name: string; description?: string }): Promise<Team> {
+    return this.client.post<Team>('/api/v1/teams', payload);
+  }
+
+  public async addTeamMember(teamId: TeamId, userId: UserId): Promise<TeamMember> {
+    return this.client.post<TeamMember>(`/api/v1/teams/${teamId}/members`, { userId });
+  }
+
+  public async removeTeamMember(teamId: TeamId, userId: UserId): Promise<{ success: true }> {
+    return this.client.delete<{ success: true }>(`/api/v1/teams/${teamId}/members/${userId}`);
+  }
+}
+

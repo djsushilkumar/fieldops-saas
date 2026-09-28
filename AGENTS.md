@@ -43,7 +43,8 @@ Every agent working on this codebase must strictly adhere to the following twent
   - **Phase 01 — Product, Brand & Foundation**: PRD, Personas, Roles, Brand, Design Tokens, QA Strategy.
   - **Phase 02 — Architecture + Monorepo + Engineering Foundation**: Monorepo, Workspaces, Packages, Web/Mobile shell foundations, Database contract, CI pipeline.
   - **Phase 03 — Identity, Multi-Tenancy & Access Control**: PostgreSQL RLS, Web/Mobile Authentication, RBAC, Final Owner Protection, Invitations, Security Tests.
-- **Current Active Phase**: **Phase 03 Completed / Transitioning to Phase 04 (Task Management)**
+  - **Phase 04 — Task Management Engine**: Task Domain, State Machine, Checklists, Attachments, Comments, Append-Only Activities, Web UI, Mobile Tabbed Views, Offline Mutation Queue & Idempotency.
+- **Current Active Phase**: **Phase 04 Completed / Transitioning to Phase 05 (Field Visits & Verification)**
 - **Strictly Prohibited in Current State**:
   - Implementing live business functionality outside active phase boundaries: Live GPS hardware drivers, Visit dispatching algorithms, Payment gateways, AI assistants, CRM, or Chat feeds.
   - Adding unvetted external dependencies.

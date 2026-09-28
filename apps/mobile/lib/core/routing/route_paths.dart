@@ -4,6 +4,7 @@ class RoutePaths {
   static const String login = '/login';
   static const String orgSelect = '/org-select';
   static const String tasks = '/tasks';
+  static const String taskDetail = '/tasks/:id';
   static const String visits = '/visits';
   static const String activity = '/activity';
   static const String profile = '/profile';

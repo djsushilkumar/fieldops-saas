@@ -2,6 +2,8 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/home_shell_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/org_select_screen.dart';
+import '../../features/tasks/presentation/my_tasks_screen.dart';
+import '../../features/tasks/presentation/task_detail_screen.dart';
 import 'route_paths.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -18,6 +20,17 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RoutePaths.orgSelect,
       builder: (context, state) => const OrgSelectScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.tasks,
+      builder: (context, state) => const MyTasksScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.taskDetail,
+      builder: (context, state) {
+        final taskId = state.pathParameters['id'] ?? '';
+        return TaskDetailScreen(taskId: taskId);
+      },
     ),
   ],
 );
