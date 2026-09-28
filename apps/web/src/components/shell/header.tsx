@@ -12,8 +12,11 @@ export function AppHeader() {
   const { activeOrganization } = useOrganization();
 
   const isAuthenticated = authState === 'AUTHENTICATED' && user;
+  const role = activeRole || UserRole.FIELD_WORKER;
 
-  const canManageMembers = activeRole ? can(activeRole, Permissions.MEMBER_INVITE) : false;
+  const canManageMembers = can(role, Permissions.MEMBER_INVITE);
+  const canViewMap = can(role, Permissions.LOCATION_VIEW_ALL) || can(role, Permissions.LOCATION_VIEW_TEAM);
+  const canViewWorkforce = can(role, Permissions.MEMBER_PROFILE_VIEW_TEAM);
 
   return (
     <header className="sticky top-0 z-50 flex h-14 w-full items-center justify-between border-b border-border bg-surface px-6">
@@ -32,7 +35,8 @@ export function AppHeader() {
               <span>{activeOrganization.name}</span>
             </Link>
 
-            <nav className="flex items-center gap-4 text-xs font-semibold text-text-muted">
+            <nav className="flex items-center gap-3 text-xs font-semibold text-text-muted">
+              {/* Operations Group */}
               <Link href="/dashboard" className="hover:text-primary transition-colors">
                 Dashboard
               </Link>
@@ -42,15 +46,50 @@ export function AppHeader() {
               <Link href="/visits" className="hover:text-primary transition-colors">
                 Visits
               </Link>
-              <Link href="/locations" className="hover:text-primary transition-colors">
-                Locations
+              <Link href="/calendar" className="hover:text-primary transition-colors">
+                Calendar
               </Link>
+              {canViewMap && (
+                <Link href="/map" className="hover:text-primary transition-colors">
+                  Live Map
+                </Link>
+              )}
+
+              {/* Separator */}
+              <span className="text-slate-300">|</span>
+
+              {/* Workforce Group */}
+              {canViewWorkforce && (
+                <>
+                  <Link href="/employees" className="hover:text-primary transition-colors">
+                    Employees
+                  </Link>
+                  <Link href="/teams" className="hover:text-primary transition-colors">
+                    Teams
+                  </Link>
+                </>
+              )}
               <Link href="/attendance" className="hover:text-primary transition-colors">
                 Attendance
               </Link>
+              {canViewWorkforce && (
+                <Link href="/activity" className="hover:text-primary transition-colors">
+                  Activity
+                </Link>
+              )}
+
+              {/* Separator */}
+              <span className="text-slate-300">|</span>
+
+              {/* Locations */}
+              <Link href="/locations" className="hover:text-primary transition-colors">
+                Locations
+              </Link>
+
+              {/* Admin */}
               {canManageMembers && (
                 <Link href="/organization/members" className="hover:text-primary transition-colors">
-                  Members & Access
+                  Members
                 </Link>
               )}
             </nav>
