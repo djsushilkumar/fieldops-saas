@@ -50,6 +50,16 @@ import {
   VisitFilterParams,
   VisitSortParams,
   GpsCoordinates,
+  AttendanceId,
+  AttendanceRecord,
+  AttendanceStatus,
+  WorkerActivity,
+  WorkerActivityType,
+  AttendanceClockInPayload,
+  AttendanceClockOutPayload,
+  AdjustAttendancePayload,
+  AttendanceFilterParams,
+  AttendanceShiftSummary,
 } from '@fieldops/types';
 import { z } from 'zod';
 
@@ -898,6 +908,66 @@ export class VisitService {
 
   public async listActivities(visitId: VisitId): Promise<readonly VisitActivity[]> {
     return this.client.get<readonly VisitActivity[]>(`/api/v1/visits/${visitId}/activities`);
+  }
+}
+
+// =============================================================================
+// 7. ATTENDANCE & MOBILE WORKFORCE SERVICE (PHASE 06)
+// =============================================================================
+
+export class AttendanceService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async clockIn(payload?: AttendanceClockInPayload): Promise<AttendanceRecord> {
+    return this.client.post<AttendanceRecord>('/api/v1/attendance/clock-in', payload || {});
+  }
+
+  public async clockOut(payload: AttendanceClockOutPayload): Promise<AttendanceRecord> {
+    return this.client.post<AttendanceRecord>('/api/v1/attendance/clock-out', payload);
+  }
+
+  public async getActiveShift(): Promise<AttendanceRecord | null> {
+    return this.client.get<AttendanceRecord | null>('/api/v1/attendance/active');
+  }
+
+  public async getAttendance(id: AttendanceId): Promise<AttendanceRecord> {
+    return this.client.get<AttendanceRecord>(`/api/v1/attendance/${id}`);
+  }
+
+  public async listAttendance(
+    filters?: AttendanceFilterParams,
+    pagination?: PaginationParams
+  ): Promise<PaginatedData<AttendanceRecord>> {
+    const query: Record<string, string | number | boolean | undefined> = {};
+
+    if (filters?.userId) query.userId = filters.userId;
+    if (filters?.date) query.date = filters.date;
+    if (filters?.startDate) query.startDate = filters.startDate;
+    if (filters?.endDate) query.endDate = filters.endDate;
+    if (filters?.status) query.status = filters.status;
+    if (filters?.isAdjusted !== undefined) query.isAdjusted = filters.isAdjusted;
+
+    if (pagination?.page !== undefined) query.page = pagination.page;
+    if (pagination?.pageSize !== undefined) query.pageSize = pagination.pageSize;
+    if (pagination?.cursor) query.cursor = pagination.cursor;
+
+    return this.client.get<PaginatedData<AttendanceRecord>>('/api/v1/attendance', undefined, { query });
+  }
+
+  public async adjustAttendance(payload: AdjustAttendancePayload): Promise<AttendanceRecord> {
+    return this.client.post<AttendanceRecord>('/api/v1/attendance/adjust', payload);
+  }
+
+  public async getShiftSummary(date?: string): Promise<AttendanceShiftSummary> {
+    const query: Record<string, string | undefined> = {};
+    if (date) query.date = date;
+    return this.client.get<AttendanceShiftSummary>('/api/v1/attendance/summary', undefined, { query });
+  }
+
+  public async listWorkerActivities(userId?: UserId): Promise<readonly WorkerActivity[]> {
+    const query: Record<string, string | undefined> = {};
+    if (userId) query.userId = userId;
+    return this.client.get<readonly WorkerActivity[]>('/api/v1/attendance/activities', undefined, { query });
   }
 }
 

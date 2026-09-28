@@ -45,7 +45,8 @@ Every agent working on this codebase must strictly adhere to the following twent
   - **Phase 03 — Identity, Multi-Tenancy & Access Control**: PostgreSQL RLS, Web/Mobile Authentication, RBAC, Final Owner Protection, Invitations, Security Tests.
   - **Phase 04 — Task Management Engine**: Task Domain, State Machine, Checklists, Attachments, Comments, Append-Only Activities, Web UI, Mobile Tabbed Views, Offline Mutation Queue & Idempotency.
   - **Phase 05 — Field Operations, Visits, GPS Verification & Proof of Work**: Geofenced Locations, Visit Lifecycle State Machine, Haversine Distance Calculation, Check-in/out, Exception Overrides, Proofs (Photos, Signatures, Notes), Offline Visits Queue, Security & Geospatial Suites.
-- **Current Active Phase**: **Phase 05 Completed / Transitioning to Phase 06 (Attendance & Shift Tracking)**
+  - **Phase 06 — Attendance & Shift Tracking**: Shift clock-in/out, GPS point-in-time acquisition, duration calculation, duplicate shift prevention, audited manual adjustments, worker activity ledger, web attendance board, mobile duty timer, offline mutation queueing, and tenant isolation.
+- **Current Active Phase**: **Phase 06 Completed / Transitioning to Phase 07 (Web Dispatch & Management Console)**
 - **Strictly Prohibited in Current State**:
   - Implementing live business functionality outside active phase boundaries: Live continuous GPS hardware drivers / fleet telematics, Route optimization dispatch algorithms, Payment gateways, AI assistants, CRM, or Chat feeds.
   - Adding unvetted external dependencies.

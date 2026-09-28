@@ -6,6 +6,7 @@ import '../../features/tasks/presentation/my_tasks_screen.dart';
 import '../../features/tasks/presentation/task_detail_screen.dart';
 import '../../features/visits/presentation/visits_screen.dart';
 import '../../features/visits/presentation/visit_detail_screen.dart';
+import '../../features/attendance/presentation/attendance_screen.dart';
 import 'route_paths.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -44,6 +45,10 @@ final GoRouter appRouter = GoRouter(
         final visitId = state.pathParameters['id'] ?? '';
         return VisitDetailScreen(visitId: visitId);
       },
+    ),
+    GoRoute(
+      path: RoutePaths.attendance,
+      builder: (context, state) => const AttendanceScreen(),
     ),
   ],
 );

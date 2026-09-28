@@ -14,6 +14,7 @@ import {
   LocationVerificationResult,
   ProofType,
   LocationEventType,
+  WorkerActivityType,
   UUID,
   TenantId,
   UserId,
@@ -21,6 +22,7 @@ import {
   LocationId,
   VisitId,
   TaskId,
+  AttendanceId,
   IsoDateTime,
 } from '@fieldops/types';
 
@@ -42,6 +44,7 @@ export const teamIdSchema = uuidSchema.transform((val) => val as unknown as Team
 export const locationIdSchema = uuidSchema.transform((val) => val as unknown as LocationId);
 export const visitIdSchema = uuidSchema.transform((val) => val as unknown as VisitId);
 export const taskIdSchema = uuidSchema.transform((val) => val as unknown as TaskId);
+export const attendanceIdSchema = uuidSchema.transform((val) => val as unknown as AttendanceId);
 
 /**
  * Validates ISO-8601 UTC timestamp format.
@@ -50,6 +53,16 @@ export const isoDateTimeSchema = z
   .string()
   .datetime({ offset: true, message: 'Timestamp must be an ISO-8601 formatted date string' })
   .transform((val) => val as IsoDateTime);
+
+export const latitudeSchema = z
+  .number()
+  .min(-90, 'Latitude must be between -90 and 90')
+  .max(90, 'Latitude must be between -90 and 90');
+
+export const longitudeSchema = z
+  .number()
+  .min(-180, 'Longitude must be between -180 and 180')
+  .max(180, 'Longitude must be between -180 and 180');
 
 /**
  * Strict slug validation: 3-63 chars, lowercase alphanumeric and single hyphens.
@@ -111,6 +124,7 @@ export const locationStatusSchema = z.nativeEnum(LocationStatus);
 export const locationVerificationResultSchema = z.nativeEnum(LocationVerificationResult);
 export const proofTypeSchema = z.nativeEnum(ProofType);
 export const locationEventTypeSchema = z.nativeEnum(LocationEventType);
+export const workerActivityTypeSchema = z.nativeEnum(WorkerActivityType);
 
 // =============================================================================
 // 3. API ENVELOPE SCHEMAS
@@ -423,3 +437,54 @@ export const tenantContextSchema = z.object({
   role: userRoleSchema,
   permissions: z.array(z.string()),
 });
+
+// =============================================================================
+// 9. ATTENDANCE & WORKFORCE SCHEMAS (PHASE 06)
+// =============================================================================
+
+export const attendanceClockInSchema = z.object({
+  latitude: latitudeSchema.optional().nullable(),
+  longitude: longitudeSchema.optional().nullable(),
+  accuracyMeters: z.number().min(0, 'Accuracy cannot be negative').max(10000).optional().nullable(),
+  capturedAt: isoDateTimeSchema.optional(),
+  notes: z.string().trim().max(2000, 'Notes cannot exceed 2000 characters').optional().nullable(),
+});
+
+export const attendanceClockOutSchema = z.object({
+  attendanceId: attendanceIdSchema,
+  latitude: latitudeSchema.optional().nullable(),
+  longitude: longitudeSchema.optional().nullable(),
+  accuracyMeters: z.number().min(0, 'Accuracy cannot be negative').max(10000).optional().nullable(),
+  capturedAt: isoDateTimeSchema.optional(),
+  notes: z.string().trim().max(2000, 'Notes cannot exceed 2000 characters').optional().nullable(),
+});
+
+export const adjustAttendanceSchema = z
+  .object({
+    attendanceId: attendanceIdSchema,
+    checkInAt: isoDateTimeSchema.optional(),
+    checkOutAt: isoDateTimeSchema,
+    reason: z.string().trim().min(10, 'Adjustment reason must be at least 10 characters long').max(1000),
+  })
+  .refine(
+    (data) => {
+      if (data.checkInAt && data.checkOutAt) {
+        return new Date(data.checkOutAt).getTime() >= new Date(data.checkInAt).getTime();
+      }
+      return true;
+    },
+    {
+      message: 'Check-out time cannot be earlier than check-in time',
+      path: ['checkOutAt'],
+    }
+  );
+
+export const attendanceFilterSchema = z.object({
+  userId: userIdSchema.optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be formatted as YYYY-MM-DD').optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be formatted as YYYY-MM-DD').optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be formatted as YYYY-MM-DD').optional(),
+  status: attendanceStatusSchema.optional(),
+  isAdjusted: z.coerce.boolean().optional(),
+});
+

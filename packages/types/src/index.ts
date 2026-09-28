@@ -139,6 +139,9 @@ export enum AttendanceStatus {
   CLOCKED_IN = 'CLOCKED_IN',
   ON_BREAK = 'ON_BREAK',
   CLOCKED_OUT = 'CLOCKED_OUT',
+  CHECKED_IN = 'CHECKED_IN',
+  CHECKED_OUT = 'CHECKED_OUT',
+  CORRECTED = 'CORRECTED',
 }
 
 export enum CheckInResult {
@@ -1339,5 +1342,197 @@ export function isVisitOverdue(
   const cutoffTimeStr = visit.scheduledEnd || visit.scheduledStart;
   const cutoffTime = new Date(cutoffTimeStr).getTime();
   return now.getTime() > cutoffTime;
+}
+
+// =============================================================================
+// 9. ATTENDANCE & MOBILE WORKFORCE DOMAIN (PHASE 06)
+// =============================================================================
+
+export enum WorkerActivityType {
+  ATTENDANCE_CHECKIN = 'ATTENDANCE_CHECKIN',
+  ATTENDANCE_CHECKOUT = 'ATTENDANCE_CHECKOUT',
+  ATTENDANCE_CORRECTED = 'ATTENDANCE_CORRECTED',
+  TASK_ACCEPTED = 'TASK_ACCEPTED',
+  TASK_STARTED = 'TASK_STARTED',
+  TASK_COMPLETED = 'TASK_COMPLETED',
+  VISIT_EN_ROUTE = 'VISIT_EN_ROUTE',
+  VISIT_CHECKIN = 'VISIT_CHECKIN',
+  VISIT_CHECKOUT = 'VISIT_CHECKOUT',
+  VISIT_COMPLETED = 'VISIT_COMPLETED',
+  PROOF_CAPTURED = 'PROOF_CAPTURED',
+}
+
+export interface AttendanceRecord {
+  id: AttendanceId;
+  organizationId: TenantId;
+  userId: UserId;
+  date: string; // YYYY-MM-DD
+  checkInAt: IsoDateTime;
+  checkOutAt?: IsoDateTime | null;
+  checkInLatitude?: number | null;
+  checkInLongitude?: number | null;
+  checkInAccuracyMeters?: number | null;
+  checkOutLatitude?: number | null;
+  checkOutLongitude?: number | null;
+  checkOutAccuracyMeters?: number | null;
+  status: AttendanceStatus;
+  durationSeconds?: number | null;
+  notes?: string | null;
+  isManuallyAdjusted: boolean;
+  adjustmentReason?: string | null;
+  adjustedByUserId?: UserId | null;
+  adjustedAt?: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  userName?: string;
+  userEmail?: string;
+  adjustedByName?: string;
+}
+
+export interface WorkerActivity {
+  id: UUID;
+  organizationId: TenantId;
+  userId: UserId;
+  activityType: WorkerActivityType;
+  title: string;
+  description?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: IsoDateTime;
+}
+
+export interface AttendanceClockInPayload {
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracyMeters?: number | null;
+  capturedAt?: IsoDateTime;
+  notes?: string | null;
+}
+
+export interface AttendanceClockOutPayload {
+  attendanceId: AttendanceId;
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracyMeters?: number | null;
+  capturedAt?: IsoDateTime;
+  notes?: string | null;
+}
+
+export interface AdjustAttendancePayload {
+  attendanceId: AttendanceId;
+  checkInAt?: IsoDateTime;
+  checkOutAt: IsoDateTime;
+  reason: string;
+}
+
+export interface AttendanceFilterParams {
+  userId?: UserId;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: AttendanceStatus;
+  isAdjusted?: boolean;
+}
+
+export interface AttendanceShiftSummary {
+  activeCount: number;
+  completedTodayCount: number;
+  totalDurationSecondsToday: number;
+  adjustedCount: number;
+}
+
+/**
+ * Validates attendance state transitions.
+ * CLOCKED_IN / CHECKED_IN -> ON_BREAK, CLOCKED_OUT / CHECKED_OUT, CORRECTED
+ * ON_BREAK -> CLOCKED_IN, CLOCKED_OUT
+ * CLOCKED_OUT / CHECKED_OUT -> CORRECTED
+ */
+export function isValidAttendanceTransition(
+  currentStatus: AttendanceStatus,
+  targetStatus: AttendanceStatus
+): { valid: boolean; reason?: string } {
+  if (currentStatus === targetStatus) {
+    return { valid: true };
+  }
+
+  // Any status can be manually corrected by an authorized supervisor
+  if (targetStatus === AttendanceStatus.CORRECTED) {
+    return { valid: true };
+  }
+
+  const isCurrentActive =
+    currentStatus === AttendanceStatus.CLOCKED_IN ||
+    currentStatus === AttendanceStatus.CHECKED_IN;
+
+  if (isCurrentActive) {
+    if (
+      targetStatus === AttendanceStatus.CLOCKED_OUT ||
+      targetStatus === AttendanceStatus.CHECKED_OUT ||
+      targetStatus === AttendanceStatus.ON_BREAK
+    ) {
+      return { valid: true };
+    }
+    return {
+      valid: false,
+      reason: `Active attendance session can only transition to CLOCKED_OUT, ON_BREAK, or CORRECTED (requested: ${targetStatus}).`,
+    };
+  }
+
+  if (currentStatus === AttendanceStatus.ON_BREAK) {
+    if (
+      targetStatus === AttendanceStatus.CLOCKED_IN ||
+      targetStatus === AttendanceStatus.CHECKED_IN ||
+      targetStatus === AttendanceStatus.CLOCKED_OUT ||
+      targetStatus === AttendanceStatus.CHECKED_OUT
+    ) {
+      return { valid: true };
+    }
+    return {
+      valid: false,
+      reason: `Break session can only transition to CLOCKED_IN, CLOCKED_OUT, or CORRECTED (requested: ${targetStatus}).`,
+    };
+  }
+
+  const isCurrentClosed =
+    currentStatus === AttendanceStatus.CLOCKED_OUT ||
+    currentStatus === AttendanceStatus.CHECKED_OUT ||
+    currentStatus === AttendanceStatus.CORRECTED;
+
+  if (isCurrentClosed) {
+    return {
+      valid: false,
+      reason: `Closed attendance record (${currentStatus}) cannot be reopened directly; must be adjusted via formal correction.`,
+    };
+  }
+
+  return { valid: false, reason: `Invalid transition from ${currentStatus} to ${targetStatus}.` };
+}
+
+/**
+ * Calculates shift duration in seconds between checkInAt and checkOutAt (or now).
+ */
+export function calculateShiftDurationSeconds(
+  checkInAt: string,
+  checkOutAt?: string | null,
+  now: Date = new Date()
+): number {
+  const startMs = new Date(checkInAt).getTime();
+  const endMs = checkOutAt ? new Date(checkOutAt).getTime() : now.getTime();
+  return Math.max(0, Math.floor((endMs - startMs) / 1000));
+}
+
+/**
+ * Formats duration in seconds to human-readable string (e.g., "8h 15m").
+ */
+export function formatShiftDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || seconds < 0) {
+    return '0m';
+  }
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (hours === 0) {
+    return `${minutes}m`;
+  }
+  return `${hours}h ${minutes}m`;
 }
 

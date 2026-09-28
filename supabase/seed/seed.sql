@@ -197,6 +197,114 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
+-- Seed Attendance Records
+INSERT INTO public.attendance_records (
+    id,
+    organization_id,
+    user_id,
+    date,
+    check_in_at,
+    check_out_at,
+    check_in_latitude,
+    check_in_longitude,
+    check_in_accuracy_meters,
+    status,
+    duration_seconds,
+    notes,
+    is_manually_adjusted,
+    adjustment_reason,
+    adjusted_by_user_id,
+    adjusted_at
+) VALUES
+  (
+    'a0000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000004',
+    CURRENT_DATE,
+    NOW() - INTERVAL '3 hours',
+    NULL,
+    37.7749,
+    -122.4194,
+    12.5,
+    'CLOCKED_IN',
+    NULL,
+    'Started field shift at HQ depot.',
+    false,
+    NULL,
+    NULL,
+    NULL
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000005',
+    CURRENT_DATE - INTERVAL '1 day',
+    (CURRENT_DATE - INTERVAL '1 day') + TIME '08:00:00',
+    (CURRENT_DATE - INTERVAL '1 day') + TIME '16:30:00',
+    37.7749,
+    -122.4194,
+    10.0,
+    'CLOCKED_OUT',
+    30600,
+    'Full day dispatch completed.',
+    false,
+    NULL,
+    NULL,
+    NULL
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000004',
+    CURRENT_DATE - INTERVAL '2 days',
+    (CURRENT_DATE - INTERVAL '2 days') + TIME '08:30:00',
+    (CURRENT_DATE - INTERVAL '2 days') + TIME '17:00:00',
+    37.7749,
+    -122.4194,
+    15.0,
+    'CORRECTED',
+    30600,
+    '[Manual Adjustment] Adjusted missed clock-out due to cell tower outage.',
+    true,
+    'Adjusted missed clock-out due to cell tower outage.',
+    'e0000000-0000-0000-0000-000000000002',
+    NOW() - INTERVAL '1 day'
+  )
+ON CONFLICT (id) DO NOTHING;
+
+-- Seed Worker Activities
+INSERT INTO public.worker_activities (
+    id,
+    organization_id,
+    user_id,
+    activity_type,
+    title,
+    description,
+    metadata,
+    created_at
+) VALUES
+  (
+    'b0000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000004',
+    'ATTENDANCE_CHECKIN',
+    'Clocked In for Workday',
+    'Recorded attendance check-in via mobile application.',
+    '{"has_location": true}'::jsonb,
+    NOW() - INTERVAL '3 hours'
+  ),
+  (
+    'b0000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000004',
+    'VISIT_EN_ROUTE',
+    'En Route to Location',
+    'Departed for Mission District Substation #4.',
+    '{"visit_id": "90000000-0000-0000-0000-000000000001"}'::jsonb,
+    NOW() - INTERVAL '2 hours'
+  )
+ON CONFLICT (id) DO NOTHING;
+
 
 
 

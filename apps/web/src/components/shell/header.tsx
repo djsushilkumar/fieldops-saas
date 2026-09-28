@@ -45,6 +45,9 @@ export function AppHeader() {
               <Link href="/locations" className="hover:text-primary transition-colors">
                 Locations
               </Link>
+              <Link href="/attendance" className="hover:text-primary transition-colors">
+                Attendance
+              </Link>
               {canManageMembers && (
                 <Link href="/organization/members" className="hover:text-primary transition-colors">
                   Members & Access

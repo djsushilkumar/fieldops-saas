@@ -8,6 +8,7 @@ import {
   TeamService,
   LocationService,
   VisitService,
+  AttendanceService,
 } from '@fieldops/api';
 import { loadClientConfig } from '@fieldops/config';
 
@@ -74,4 +75,9 @@ export function getLocationService(): LocationService {
 export function getVisitService(): VisitService {
   return new VisitService(getApiClient());
 }
+
+export function getAttendanceService(): AttendanceService {
+  return new AttendanceService(getApiClient());
+}
+
 

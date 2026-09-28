@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/routing/route_paths.dart';
+import '../../attendance/presentation/attendance_card.dart';
 import 'auth_notifier.dart';
 
 class HomeShellScreen extends ConsumerWidget {
@@ -152,6 +153,10 @@ class HomeShellScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
+            // Workforce Attendance & Duty Card
+            const AttendanceCard(),
+            const SizedBox(height: 16),
+
             // Operational Tasks Quick Action
             Card(
               elevation: 2,
@@ -242,7 +247,52 @@ class HomeShellScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
-            // Phase 04 Status Box
+            // Shift Attendance Quick Action
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: const Color(0xFF475569),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => context.push(RoutePaths.attendance),
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.history_outlined, color: Colors.white, size: 28),
+                          SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Shift History',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Daily duty logs & clock timestamps',
+                                style: TextStyle(fontSize: 11, color: Colors.white70),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Status Box
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -269,7 +319,7 @@ class HomeShellScreen extends ConsumerWidget {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Hardware keystore authentication, multi-tenant session isolation, and organization boundaries are verified. Tasks, GPS check-ins, and visit dispatching remain locked until Phase 04+.',
+                    'Hardware keystore authentication, multi-tenant session isolation, and organization boundaries are verified. Tasks, GPS check-ins, and shift tracking are operational.',
                     style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
                   ),
                 ],
