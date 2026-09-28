@@ -87,5 +87,5 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Secret Leakage Prevention Tests
-        run: npx vitest run tests/security/secret-exposure.test.ts
+      - name: Run Complete Security & Hardening Suite
+        run: pnpm vitest run tests/security/
