@@ -1,7 +1,7 @@
 # FieldOps — Multi-Tenant Field Force & Task Management SaaS
 
-> **Current Phase**: **Phase 04 — Task Management Engine (COMPLETED)**  
-> **Transition**: Moving to Phase 05 (Field Visits & Verification)  
+> **Current Phase**: **Phase 05 — Field Operations, Visits, GPS Verification & Proof of Work (COMPLETED)**  
+> **Transition**: Moving to Phase 06 (Attendance & Shift Tracking)  
 > **Target Audience**: SMBs with distributed field teams and operational personnel.
 
 ---
@@ -76,8 +76,8 @@ FieldOps is built under a disciplined 10-Phase master roadmap. Progression acros
 | **02** | **Architecture & Monorepo Foundation** | Monorepo, Workspaces, Packages, Web/Mobile shell foundations, Database contract, CI pipeline | **COMPLETED** |
 | **03** | **Identity, Multi-Tenancy & Access Control** | PostgreSQL RLS, Web/Mobile Authentication, RBAC, Final Owner Protection, Security Tests | **COMPLETED** |
 | **04** | **Task Management Engine** | Task Domain, Lifecycle State Machine, Checklists, Attachments, Comments, Timeline, Offline Idempotency | **COMPLETED** |
-| **05** | **Field Visits & Verification** | Visit scheduling, GPS geofencing, check-in/out, location exceptions | Planned |
-| **06** | **Proof-of-Work & Media Pipeline** | Photo capture with EXIF validation, digital signatures, signed upload pipeline | Planned |
+| **05** | **Field Operations Engine** | Geofenced Locations, Visit Lifecycle State Machine, Haversine Distance Calculation, Check-in/out, Exception Overrides, Proof of Work, Mobile Tabbed Views, Offline Visits Queue, Security & Geospatial Suites | **COMPLETED** |
+| **06** | **Attendance & Shift Tracking** | Clock-in/out, geofenced shifts, break tracking, manual time adjustments, attendance audit trail | Planned |
 | **07** | **Web Dispatch & Management Console** | Operational dashboard, live map, calendar scheduling, team workload management | Planned |
 | **08** | **Reporting, Analytics & Audit Console** | Operational SLA reporting, attendance export, audit trail viewer, exception dashboard | Planned |
 | **09** | **End-to-End Hardening & Security Audit** | Penetration testing, chaos testing, offline sync fuzzing, battery benchmarking | Planned |

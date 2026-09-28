@@ -4,6 +4,8 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/org_select_screen.dart';
 import '../../features/tasks/presentation/my_tasks_screen.dart';
 import '../../features/tasks/presentation/task_detail_screen.dart';
+import '../../features/visits/presentation/visits_screen.dart';
+import '../../features/visits/presentation/visit_detail_screen.dart';
 import 'route_paths.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -30,6 +32,17 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final taskId = state.pathParameters['id'] ?? '';
         return TaskDetailScreen(taskId: taskId);
+      },
+    ),
+    GoRoute(
+      path: RoutePaths.visits,
+      builder: (context, state) => const VisitsScreen(),
+    ),
+    GoRoute(
+      path: RoutePaths.visitDetail,
+      builder: (context, state) {
+        final visitId = state.pathParameters['id'] ?? '';
+        return VisitDetailScreen(visitId: visitId);
       },
     ),
   ],

@@ -197,6 +197,51 @@ class HomeShellScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
+            // Field Visits Quick Action
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: const Color(0xFF0D9488),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => context.push(RoutePaths.visits),
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.location_on_outlined, color: Colors.white, size: 28),
+                          SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Field Visits',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'GPS check-in, geofence & proof of work',
+                                style: TextStyle(fontSize: 11, color: Colors.white70),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Phase 04 Status Box
             Container(
               padding: const EdgeInsets.all(16),

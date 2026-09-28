@@ -6,6 +6,7 @@ class RoutePaths {
   static const String tasks = '/tasks';
   static const String taskDetail = '/tasks/:id';
   static const String visits = '/visits';
+  static const String visitDetail = '/visits/:id';
   static const String activity = '/activity';
   static const String profile = '/profile';
 }

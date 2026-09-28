@@ -95,13 +95,44 @@ export enum TaskStatus {
   CANCELED = 'CANCELED',
 }
 
+export enum LocationStatus {
+  ACTIVE = 'ACTIVE',
+  ARCHIVED = 'ARCHIVED',
+}
+
 export enum VisitStatus {
   SCHEDULED = 'SCHEDULED',
+  READY = 'READY',
   EN_ROUTE = 'EN_ROUTE',
   CHECKED_IN = 'CHECKED_IN',
+  IN_PROGRESS = 'IN_PROGRESS',
+  CHECKED_OUT = 'CHECKED_OUT',
   COMPLETED = 'COMPLETED',
-  MISSED = 'MISSED',
   CANCELED = 'CANCELED',
+  MISSED = 'MISSED',
+}
+
+export enum LocationVerificationResult {
+  VALID = 'VALID',
+  OUTSIDE_RADIUS = 'OUTSIDE_RADIUS',
+  LOW_ACCURACY = 'LOW_ACCURACY',
+  LOCATION_UNAVAILABLE = 'LOCATION_UNAVAILABLE',
+  STALE_LOCATION = 'STALE_LOCATION',
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+}
+
+export enum ProofType {
+  PHOTO = 'PHOTO',
+  NOTE = 'NOTE',
+  SIGNATURE = 'SIGNATURE',
+  CHECKLIST = 'CHECKLIST',
+}
+
+export enum LocationEventType {
+  CHECK_IN = 'CHECK_IN',
+  CHECK_OUT = 'CHECK_OUT',
+  MANUAL_VERIFICATION = 'MANUAL_VERIFICATION',
+  EXCEPTION_OVERRIDE = 'EXCEPTION_OVERRIDE',
 }
 
 export enum AttendanceStatus {
@@ -308,6 +339,147 @@ export interface TaskSortParams {
 }
 
 // =============================================================================
+// 5B. DOMAIN ENTITIES (PHASE 05 FIELD OPERATIONS ENGINE)
+// =============================================================================
+
+export interface Location {
+  readonly id: LocationId;
+  readonly organizationId: TenantId;
+  readonly name: string;
+  readonly address?: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly allowedRadiusMeters: number;
+  readonly status: LocationStatus;
+  readonly createdBy: UserId;
+  readonly createdAt: IsoDateTime;
+  readonly updatedAt: IsoDateTime;
+}
+
+export interface GpsCoordinates {
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number;
+  readonly capturedAt: IsoDateTime;
+}
+
+export interface VisitCheckin {
+  readonly id: UUID;
+  readonly visitId: VisitId;
+  readonly organizationId: TenantId;
+  readonly workerId: UserId;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number;
+  readonly distanceMeters: number;
+  readonly verificationResult: LocationVerificationResult;
+  readonly isException: boolean;
+  readonly exceptionReason?: string;
+  readonly clientCapturedAt: IsoDateTime;
+  readonly serverReceivedAt: IsoDateTime;
+  readonly deviceMetadata?: Record<string, unknown>;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface VisitCheckout {
+  readonly id: UUID;
+  readonly visitId: VisitId;
+  readonly organizationId: TenantId;
+  readonly workerId: UserId;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number;
+  readonly distanceMeters?: number;
+  readonly verificationResult: LocationVerificationResult;
+  readonly notes?: string;
+  readonly clientCapturedAt: IsoDateTime;
+  readonly serverReceivedAt: IsoDateTime;
+  readonly deviceMetadata?: Record<string, unknown>;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface VisitProof {
+  readonly id: UUID;
+  readonly visitId: VisitId;
+  readonly organizationId: TenantId;
+  readonly taskId?: TaskId;
+  readonly proofType: ProofType;
+  readonly storagePath?: string;
+  readonly fileName?: string;
+  readonly mimeType?: string;
+  readonly fileSizeBytes?: number;
+  readonly notes?: string;
+  readonly signerName?: string;
+  readonly createdBy: UserId;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface VisitActivity {
+  readonly id: UUID;
+  readonly visitId: VisitId;
+  readonly organizationId: TenantId;
+  readonly actorId: UserId;
+  readonly action: string;
+  readonly details: Record<string, unknown>;
+  readonly actor?: UserProfile;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface LocationEvent {
+  readonly id: UUID;
+  readonly organizationId: TenantId;
+  readonly workerId: UserId;
+  readonly visitId?: VisitId;
+  readonly eventType: LocationEventType;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number;
+  readonly source: string;
+  readonly clientCapturedAt: IsoDateTime;
+  readonly serverReceivedAt: IsoDateTime;
+  readonly createdAt: IsoDateTime;
+}
+
+export interface Visit {
+  readonly id: VisitId;
+  readonly organizationId: TenantId;
+  readonly locationId: LocationId;
+  readonly taskId?: TaskId;
+  readonly assignedTo?: UserId;
+  readonly scheduledStart: IsoDateTime;
+  readonly scheduledEnd?: IsoDateTime;
+  readonly status: VisitStatus;
+  readonly version: number;
+  readonly createdBy: UserId;
+  readonly createdAt: IsoDateTime;
+  readonly updatedAt: IsoDateTime;
+  readonly location?: Location;
+  readonly task?: Task;
+  readonly assignee?: UserProfile;
+  readonly checkin?: VisitCheckin;
+  readonly checkout?: VisitCheckout;
+  readonly proofs?: readonly VisitProof[];
+}
+
+export interface VisitFilterParams {
+  readonly status?: VisitStatus | readonly VisitStatus[];
+  readonly assignedTo?: UserId;
+  readonly locationId?: LocationId;
+  readonly taskId?: TaskId;
+  readonly fromDate?: IsoDateTime;
+  readonly toDate?: IsoDateTime;
+  readonly isOverdue?: boolean;
+}
+
+export type VisitSortField = 'scheduledStart' | 'createdAt' | 'status' | 'updatedAt';
+export type VisitSortOrder = 'asc' | 'desc';
+
+export interface VisitSortParams {
+  readonly field: VisitSortField;
+  readonly order: VisitSortOrder;
+}
+
+// =============================================================================
 // 6. ERROR TAXONOMY
 // =============================================================================
 
@@ -336,6 +508,14 @@ export enum ErrorCode {
   TASK_CONFLICT = 'TASK_CONFLICT',
   TASK_CHECKLIST_INCOMPLETE = 'TASK_CHECKLIST_INCOMPLETE',
   TASK_ATTACHMENT_INVALID = 'TASK_ATTACHMENT_INVALID',
+  LOCATION_NOT_FOUND = 'LOCATION_NOT_FOUND',
+  LOCATION_ACCESS_DENIED = 'LOCATION_ACCESS_DENIED',
+  LOCATION_INVALID_COORDINATES = 'LOCATION_INVALID_COORDINATES',
+  VISIT_NOT_FOUND = 'VISIT_NOT_FOUND',
+  VISIT_ACCESS_DENIED = 'VISIT_ACCESS_DENIED',
+  VISIT_INVALID_STATUS_TRANSITION = 'VISIT_INVALID_STATUS_TRANSITION',
+  VISIT_PROOF_INCOMPLETE = 'VISIT_PROOF_INCOMPLETE',
+  VISIT_CONFLICT = 'VISIT_CONFLICT',
 }
 
 export interface ApiErrorDetail {
@@ -480,12 +660,19 @@ export const Permissions = {
 
   // Field Visits
   VISIT_SCHEDULE: 'visit:schedule',
+  VISIT_UPDATE: 'visit:update',
   VISIT_CANCEL: 'visit:cancel',
   VISIT_CHECKIN_OWN: 'visit:checkin:own',
+  VISIT_COMPLETE: 'visit:complete',
   VISIT_GEOFENCE_OVERRIDE: 'visit:geofence_override',
   VISIT_VIEW_ALL: 'visit:view:all',
   VISIT_VIEW_TEAM: 'visit:view:team',
   VISIT_VIEW_OWN: 'visit:view:own',
+
+  // Proof of Work & Location Events
+  PROOF_VIEW: 'proof:view',
+  PROOF_CREATE: 'proof:create',
+  LOCATION_EVENT_VIEW: 'location_event:view',
 
   // Attendance & Shift
   ATTENDANCE_CLOCK_OWN: 'attendance:clock:own',
@@ -526,9 +713,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.TASK_DELETE,
     Permissions.TASK_VIEW_ALL,
     Permissions.VISIT_SCHEDULE,
+    Permissions.VISIT_UPDATE,
     Permissions.VISIT_CANCEL,
+    Permissions.VISIT_COMPLETE,
     Permissions.VISIT_GEOFENCE_OVERRIDE,
     Permissions.VISIT_VIEW_ALL,
+    Permissions.PROOF_VIEW,
+    Permissions.PROOF_CREATE,
+    Permissions.LOCATION_EVENT_VIEW,
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_ORG,
     Permissions.ATTENDANCE_ADJUST,
@@ -554,9 +746,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.TASK_DELETE,
     Permissions.TASK_VIEW_ALL,
     Permissions.VISIT_SCHEDULE,
+    Permissions.VISIT_UPDATE,
     Permissions.VISIT_CANCEL,
+    Permissions.VISIT_COMPLETE,
     Permissions.VISIT_GEOFENCE_OVERRIDE,
     Permissions.VISIT_VIEW_ALL,
+    Permissions.PROOF_VIEW,
+    Permissions.PROOF_CREATE,
+    Permissions.LOCATION_EVENT_VIEW,
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_ORG,
     Permissions.ATTENDANCE_ADJUST,
@@ -576,9 +773,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.TASK_DELETE,
     Permissions.TASK_VIEW_ALL,
     Permissions.VISIT_SCHEDULE,
+    Permissions.VISIT_UPDATE,
     Permissions.VISIT_CANCEL,
+    Permissions.VISIT_COMPLETE,
     Permissions.VISIT_GEOFENCE_OVERRIDE,
     Permissions.VISIT_VIEW_ALL,
+    Permissions.PROOF_VIEW,
+    Permissions.PROOF_CREATE,
+    Permissions.LOCATION_EVENT_VIEW,
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_ORG,
     Permissions.ATTENDANCE_ADJUST,
@@ -593,10 +795,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.TASK_DELETE,
     Permissions.TASK_VIEW_TEAM,
     Permissions.VISIT_SCHEDULE,
+    Permissions.VISIT_UPDATE,
     Permissions.VISIT_CANCEL,
     Permissions.VISIT_CHECKIN_OWN,
+    Permissions.VISIT_COMPLETE,
     Permissions.VISIT_GEOFENCE_OVERRIDE,
     Permissions.VISIT_VIEW_TEAM,
+    Permissions.PROOF_VIEW,
+    Permissions.PROOF_CREATE,
+    Permissions.LOCATION_EVENT_VIEW,
     Permissions.ATTENDANCE_CLOCK_OWN,
     Permissions.ATTENDANCE_VIEW_TEAM,
   ],
@@ -606,7 +813,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     Permissions.TASK_UPDATE_OWN,
     Permissions.TASK_VIEW_OWN,
     Permissions.VISIT_CHECKIN_OWN,
+    Permissions.VISIT_COMPLETE,
     Permissions.VISIT_VIEW_OWN,
+    Permissions.PROOF_VIEW,
+    Permissions.PROOF_CREATE,
     Permissions.ATTENDANCE_CLOCK_OWN,
   ],
 };
@@ -681,7 +891,9 @@ export function can(
       if (
         (permission === Permissions.TASK_UPDATE_OWN ||
           permission === Permissions.TASK_VIEW_OWN ||
-          permission === Permissions.VISIT_VIEW_OWN) &&
+          permission === Permissions.VISIT_VIEW_OWN ||
+          permission === Permissions.VISIT_CHECKIN_OWN ||
+          permission === Permissions.VISIT_COMPLETE) &&
         context.assigneeId &&
         context.actorId
       ) {
@@ -865,3 +1077,267 @@ export function isTaskOverdue(
   const dueTime = new Date(task.dueAt).getTime();
   return now.getTime() > dueTime;
 }
+
+// =============================================================================
+// 12. GEOSPATIAL & VISIT STATE MACHINE EVALUATORS
+// =============================================================================
+
+/**
+ * Calculates the great-circle distance between two points on the Earth's surface
+ * using the Haversine formula on a spherical model (Earth radius = 6,371,000 meters).
+ * Returns the distance in meters rounded to 2 decimal places.
+ */
+export function calculateHaversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  if (lat1 === lat2 && lon1 === lon2) {
+    return 0;
+  }
+
+  const R = 6371000; // Earth mean radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+  const clampedA = Math.min(1, Math.max(0, a));
+  const c = 2 * Math.atan2(Math.sqrt(clampedA), Math.sqrt(1 - clampedA));
+
+  return Math.round(R * c * 100) / 100;
+}
+
+export interface GeofenceVerificationOptions {
+  readonly workerCoordinates: GpsCoordinates;
+  readonly targetLatitude: number;
+  readonly targetLongitude: number;
+  readonly allowedRadiusMeters: number;
+  readonly maxAccuracyMeters?: number; // default 150m
+  readonly maxStaleAgeSeconds?: number; // default 120s
+  readonly now?: Date;
+}
+
+export interface GeofenceVerificationEvaluation {
+  readonly distanceMeters: number;
+  readonly verificationResult: LocationVerificationResult;
+  readonly isWithinRadius: boolean;
+  readonly isAccurate: boolean;
+  readonly isFresh: boolean;
+  readonly message?: string;
+}
+
+/**
+ * Authoritative client/server geofence verification engine.
+ * Evaluates proximity, accuracy threshold, and staleness of GPS fixes.
+ */
+export function verifyGeofence(options: GeofenceVerificationOptions): GeofenceVerificationEvaluation {
+  const {
+    workerCoordinates,
+    targetLatitude,
+    targetLongitude,
+    allowedRadiusMeters,
+    maxAccuracyMeters = 150,
+    maxStaleAgeSeconds = 120,
+    now = new Date(),
+  } = options;
+
+  const distanceMeters = calculateHaversineDistance(
+    workerCoordinates.latitude,
+    workerCoordinates.longitude,
+    targetLatitude,
+    targetLongitude
+  );
+
+  const isWithinRadius = distanceMeters <= allowedRadiusMeters;
+  const isAccurate = workerCoordinates.accuracyMeters <= maxAccuracyMeters;
+
+  const capturedTime = new Date(workerCoordinates.capturedAt).getTime();
+  const ageSeconds = Math.max(0, (now.getTime() - capturedTime) / 1000);
+  const isFresh = ageSeconds <= maxStaleAgeSeconds;
+
+  let verificationResult: LocationVerificationResult = LocationVerificationResult.VALID;
+  let message: string | undefined;
+
+  if (!isFresh) {
+    verificationResult = LocationVerificationResult.STALE_LOCATION;
+    message = `GPS fix is stale (${Math.round(ageSeconds)}s old, maximum allowed is ${maxStaleAgeSeconds}s).`;
+  } else if (!isAccurate) {
+    verificationResult = LocationVerificationResult.LOW_ACCURACY;
+    message = `GPS accuracy too low (${Math.round(workerCoordinates.accuracyMeters)}m, maximum allowed is ${maxAccuracyMeters}m).`;
+  } else if (!isWithinRadius) {
+    verificationResult = LocationVerificationResult.OUTSIDE_RADIUS;
+    message = `Worker is ${Math.round(distanceMeters)}m away from location (maximum allowed radius is ${allowedRadiusMeters}m).`;
+  }
+
+  return {
+    distanceMeters,
+    verificationResult,
+    isWithinRadius,
+    isAccurate,
+    isFresh,
+    message,
+  };
+}
+
+export interface VisitTransitionOptions {
+  readonly hasCheckout?: boolean;
+  readonly proofCount?: number;
+  readonly requiredProofCount?: number;
+  readonly cancelReason?: string;
+}
+
+/**
+ * Validates whether a requested visit status transition is legal per PRD Section 3.
+ */
+export function isValidVisitTransition(
+  currentStatus: VisitStatus,
+  targetStatus: VisitStatus,
+  role: UserRole,
+  options?: VisitTransitionOptions
+): { valid: boolean; reason?: string } {
+  if (currentStatus === targetStatus) {
+    return { valid: true };
+  }
+
+  // Canceled is terminal
+  if (currentStatus === VisitStatus.CANCELED) {
+    return {
+      valid: false,
+      reason: 'CANCELED is a terminal state. Visit cannot transition to any other state.',
+    };
+  }
+
+  // Completed is terminal
+  if (currentStatus === VisitStatus.COMPLETED) {
+    return {
+      valid: false,
+      reason: 'COMPLETED is a terminal state. Visit cannot transition to any other state.',
+    };
+  }
+
+  // Cancellation rule: Field Workers cannot cancel visits
+  if (targetStatus === VisitStatus.CANCELED) {
+    if (role === UserRole.FIELD_WORKER) {
+      return {
+        valid: false,
+        reason: 'Field Workers cannot cancel visits. Contact a supervisor or manager.',
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from SCHEDULED
+  if (currentStatus === VisitStatus.SCHEDULED) {
+    if (
+      targetStatus !== VisitStatus.READY &&
+      targetStatus !== VisitStatus.EN_ROUTE &&
+      targetStatus !== VisitStatus.CHECKED_IN &&
+      targetStatus !== VisitStatus.MISSED
+    ) {
+      return {
+        valid: false,
+        reason: `SCHEDULED can only transition to READY, EN_ROUTE, CHECKED_IN, MISSED, or CANCELED (requested: ${targetStatus}).`,
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from READY
+  if (currentStatus === VisitStatus.READY) {
+    if (
+      targetStatus !== VisitStatus.EN_ROUTE &&
+      targetStatus !== VisitStatus.CHECKED_IN &&
+      targetStatus !== VisitStatus.MISSED
+    ) {
+      return {
+        valid: false,
+        reason: `READY can only transition to EN_ROUTE, CHECKED_IN, MISSED, or CANCELED (requested: ${targetStatus}).`,
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from EN_ROUTE
+  if (currentStatus === VisitStatus.EN_ROUTE) {
+    if (targetStatus !== VisitStatus.CHECKED_IN && targetStatus !== VisitStatus.MISSED) {
+      return {
+        valid: false,
+        reason: `EN_ROUTE can only transition to CHECKED_IN, MISSED, or CANCELED (requested: ${targetStatus}).`,
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from CHECKED_IN
+  if (currentStatus === VisitStatus.CHECKED_IN) {
+    if (targetStatus !== VisitStatus.IN_PROGRESS && targetStatus !== VisitStatus.CHECKED_OUT) {
+      return {
+        valid: false,
+        reason: `CHECKED_IN can only transition to IN_PROGRESS, CHECKED_OUT, or CANCELED (requested: ${targetStatus}).`,
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from IN_PROGRESS
+  if (currentStatus === VisitStatus.IN_PROGRESS) {
+    if (targetStatus !== VisitStatus.CHECKED_OUT) {
+      return {
+        valid: false,
+        reason: `IN_PROGRESS can only transition to CHECKED_OUT or CANCELED (requested: ${targetStatus}).`,
+      };
+    }
+    return { valid: true };
+  }
+
+  // Transitions from CHECKED_OUT
+  if (currentStatus === VisitStatus.CHECKED_OUT) {
+    if (targetStatus !== VisitStatus.COMPLETED) {
+      return {
+        valid: false,
+        reason: `CHECKED_OUT can only transition to COMPLETED or CANCELED (requested: ${targetStatus}).`,
+      };
+    }
+    if (options?.hasCheckout === false) {
+      return {
+        valid: false,
+        reason: 'Cannot complete visit without recording check-out.',
+      };
+    }
+    if (
+      options?.requiredProofCount !== undefined &&
+      options?.proofCount !== undefined &&
+      options.proofCount < options.requiredProofCount
+    ) {
+      return {
+        valid: false,
+        reason: `Cannot complete visit: required ${options.requiredProofCount} proof(s), but only ${options.proofCount} provided.`,
+      };
+    }
+    return { valid: true };
+  }
+
+  return { valid: false, reason: `Invalid status transition from ${currentStatus} to ${targetStatus}.` };
+}
+
+/**
+ * Calculates whether a visit is overdue/missed based on scheduledEnd/scheduledStart and current time in UTC.
+ */
+export function isVisitOverdue(
+  visit: { status: VisitStatus; scheduledStart: string; scheduledEnd?: string | null },
+  now: Date = new Date()
+): boolean {
+  if (visit.status === VisitStatus.COMPLETED || visit.status === VisitStatus.CANCELED) {
+    return false;
+  }
+  const cutoffTimeStr = visit.scheduledEnd || visit.scheduledStart;
+  const cutoffTime = new Date(cutoffTimeStr).getTime();
+  return now.getTime() > cutoffTime;
+}
+

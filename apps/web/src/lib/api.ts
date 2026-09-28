@@ -6,6 +6,8 @@ import {
   ProfileService,
   TaskService,
   TeamService,
+  LocationService,
+  VisitService,
 } from '@fieldops/api';
 import { loadClientConfig } from '@fieldops/config';
 
@@ -63,5 +65,13 @@ export function getTaskService(): TaskService {
 
 export function getTeamService(): TeamService {
   return new TeamService(getApiClient());
+}
+
+export function getLocationService(): LocationService {
+  return new LocationService(getApiClient());
+}
+
+export function getVisitService(): VisitService {
+  return new VisitService(getApiClient());
 }
 

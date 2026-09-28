@@ -33,6 +33,23 @@ import {
   IsoDateTime,
   OfflineMutation,
   OfflineSyncResponse,
+  LocationId,
+  VisitId,
+  Location,
+  LocationStatus,
+  LocationVerificationResult,
+  ProofType,
+  LocationEventType,
+  Visit,
+  VisitStatus,
+  VisitCheckin,
+  VisitCheckout,
+  VisitProof,
+  VisitActivity,
+  LocationEvent,
+  VisitFilterParams,
+  VisitSortParams,
+  GpsCoordinates,
 } from '@fieldops/types';
 import { z } from 'zod';
 
@@ -711,4 +728,177 @@ export class TeamService {
     return this.client.delete<{ success: true }>(`/api/v1/teams/${teamId}/members/${userId}`);
   }
 }
+
+// =============================================================================
+// 7. PHASE 05 FIELD OPERATIONS & VISIT SERVICES
+// =============================================================================
+
+export interface CreateLocationPayload {
+  readonly name: string;
+  readonly address?: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly allowedRadiusMeters?: number;
+}
+
+export interface UpdateLocationPayload {
+  readonly name?: string;
+  readonly address?: string;
+  readonly latitude?: number;
+  readonly longitude?: number;
+  readonly allowedRadiusMeters?: number;
+  readonly status?: LocationStatus;
+}
+
+export class LocationService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async listLocations(filters?: { status?: LocationStatus; search?: string }): Promise<readonly Location[]> {
+    const query: Record<string, string | number | boolean | undefined> = {};
+    if (filters?.status) query.status = filters.status;
+    if (filters?.search) query.search = filters.search;
+    return this.client.get<readonly Location[]>('/api/v1/locations', undefined, { query });
+  }
+
+  public async getLocation(id: LocationId): Promise<Location> {
+    return this.client.get<Location>(`/api/v1/locations/${id}`);
+  }
+
+  public async createLocation(payload: CreateLocationPayload): Promise<Location> {
+    return this.client.post<Location>('/api/v1/locations', payload);
+  }
+
+  public async updateLocation(id: LocationId, payload: UpdateLocationPayload): Promise<Location> {
+    return this.client.patch<Location>(`/api/v1/locations/${id}`, payload);
+  }
+
+  public async archiveLocation(id: LocationId): Promise<Location> {
+    return this.client.patch<Location>(`/api/v1/locations/${id}`, { status: LocationStatus.ARCHIVED });
+  }
+}
+
+export interface CreateVisitPayload {
+  readonly locationId: LocationId;
+  readonly taskId?: TaskId;
+  readonly assignedTo?: UserId;
+  readonly scheduledStart: IsoDateTime;
+  readonly scheduledEnd?: IsoDateTime;
+}
+
+export interface UpdateVisitPayload {
+  readonly locationId?: LocationId;
+  readonly taskId?: TaskId | null;
+  readonly assignedTo?: UserId | null;
+  readonly scheduledStart?: IsoDateTime;
+  readonly scheduledEnd?: IsoDateTime | null;
+  readonly version: number;
+}
+
+export interface TransitionVisitStatusPayload {
+  readonly status: VisitStatus;
+  readonly cancelReason?: string;
+  readonly expectedVersion?: number;
+}
+
+export interface CheckinPayload {
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number;
+  readonly clientCapturedAt: IsoDateTime;
+  readonly exceptionReason?: string;
+  readonly deviceMetadata?: Record<string, unknown>;
+}
+
+export interface CheckoutPayload {
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracyMeters: number;
+  readonly clientCapturedAt: IsoDateTime;
+  readonly notes?: string;
+  readonly deviceMetadata?: Record<string, unknown>;
+}
+
+export interface CreateProofPayload {
+  readonly proofType: ProofType;
+  readonly storagePath?: string;
+  readonly fileName?: string;
+  readonly mimeType?: string;
+  readonly fileSizeBytes?: number;
+  readonly notes?: string;
+  readonly signerName?: string;
+  readonly taskId?: TaskId;
+}
+
+export class VisitService {
+  constructor(private readonly client: FieldOpsApiClient) {}
+
+  public async listVisits(
+    filters?: VisitFilterParams,
+    pagination?: PaginationParams,
+    sort?: VisitSortParams
+  ): Promise<PaginatedData<Visit>> {
+    const query: Record<string, string | number | boolean | undefined> = {};
+
+    if (filters?.status) {
+      query.status = Array.isArray(filters.status)
+        ? (filters.status as readonly string[]).join(',')
+        : String(filters.status);
+    }
+    if (filters?.assignedTo) query.assignedTo = filters.assignedTo;
+    if (filters?.locationId) query.locationId = filters.locationId;
+    if (filters?.taskId) query.taskId = filters.taskId;
+    if (filters?.isOverdue !== undefined) query.isOverdue = filters.isOverdue;
+    if (filters?.fromDate) query.fromDate = filters.fromDate;
+    if (filters?.toDate) query.toDate = filters.toDate;
+
+    if (pagination?.page !== undefined) query.page = pagination.page;
+    if (pagination?.pageSize !== undefined) query.pageSize = pagination.pageSize;
+    if (pagination?.cursor) query.cursor = pagination.cursor;
+
+    if (sort?.field) query.sortField = sort.field;
+    if (sort?.order) query.sortOrder = sort.order;
+
+    return this.client.get<PaginatedData<Visit>>('/api/v1/visits', undefined, { query });
+  }
+
+  public async getVisit(id: VisitId): Promise<Visit> {
+    return this.client.get<Visit>(`/api/v1/visits/${id}`);
+  }
+
+  public async createVisit(payload: CreateVisitPayload): Promise<Visit> {
+    return this.client.post<Visit>('/api/v1/visits', payload);
+  }
+
+  public async updateVisit(id: VisitId, payload: UpdateVisitPayload): Promise<Visit> {
+    return this.client.patch<Visit>(`/api/v1/visits/${id}`, payload);
+  }
+
+  public async transitionStatus(
+    id: VisitId,
+    payload: TransitionVisitStatusPayload
+  ): Promise<Visit> {
+    return this.client.post<Visit>(`/api/v1/visits/${id}/transition`, payload);
+  }
+
+  public async recordCheckin(id: VisitId, payload: CheckinPayload): Promise<VisitCheckin> {
+    return this.client.post<VisitCheckin>(`/api/v1/visits/${id}/checkin`, payload);
+  }
+
+  public async recordCheckout(id: VisitId, payload: CheckoutPayload): Promise<VisitCheckout> {
+    return this.client.post<VisitCheckout>(`/api/v1/visits/${id}/checkout`, payload);
+  }
+
+  public async listProofs(visitId: VisitId): Promise<readonly VisitProof[]> {
+    return this.client.get<readonly VisitProof[]>(`/api/v1/visits/${visitId}/proofs`);
+  }
+
+  public async createProof(visitId: VisitId, payload: CreateProofPayload): Promise<VisitProof> {
+    return this.client.post<VisitProof>(`/api/v1/visits/${visitId}/proofs`, payload);
+  }
+
+  public async listActivities(visitId: VisitId): Promise<readonly VisitActivity[]> {
+    return this.client.get<readonly VisitActivity[]>(`/api/v1/visits/${visitId}/activities`);
+  }
+}
+
 

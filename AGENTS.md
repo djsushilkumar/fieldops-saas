@@ -44,9 +44,10 @@ Every agent working on this codebase must strictly adhere to the following twent
   - **Phase 02 — Architecture + Monorepo + Engineering Foundation**: Monorepo, Workspaces, Packages, Web/Mobile shell foundations, Database contract, CI pipeline.
   - **Phase 03 — Identity, Multi-Tenancy & Access Control**: PostgreSQL RLS, Web/Mobile Authentication, RBAC, Final Owner Protection, Invitations, Security Tests.
   - **Phase 04 — Task Management Engine**: Task Domain, State Machine, Checklists, Attachments, Comments, Append-Only Activities, Web UI, Mobile Tabbed Views, Offline Mutation Queue & Idempotency.
-- **Current Active Phase**: **Phase 04 Completed / Transitioning to Phase 05 (Field Visits & Verification)**
+  - **Phase 05 — Field Operations, Visits, GPS Verification & Proof of Work**: Geofenced Locations, Visit Lifecycle State Machine, Haversine Distance Calculation, Check-in/out, Exception Overrides, Proofs (Photos, Signatures, Notes), Offline Visits Queue, Security & Geospatial Suites.
+- **Current Active Phase**: **Phase 05 Completed / Transitioning to Phase 06 (Attendance & Shift Tracking)**
 - **Strictly Prohibited in Current State**:
-  - Implementing live business functionality outside active phase boundaries: Live GPS hardware drivers, Visit dispatching algorithms, Payment gateways, AI assistants, CRM, or Chat feeds.
+  - Implementing live business functionality outside active phase boundaries: Live continuous GPS hardware drivers / fleet telematics, Route optimization dispatch algorithms, Payment gateways, AI assistants, CRM, or Chat feeds.
   - Adding unvetted external dependencies.
 
 

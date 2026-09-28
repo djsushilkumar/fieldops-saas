@@ -132,5 +132,71 @@ VALUES
   ('70000000-0000-0000-0000-000000000003', '60000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Log gauge pressure values', 2, false, false)
 ON CONFLICT (id) DO NOTHING;
 
+-- Phase 05: Synthetic Locations
+INSERT INTO locations (id, organization_id, name, address, latitude, longitude, allowed_radius_meters, status, created_by)
+VALUES
+  (
+    '80000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'Substation Alpha - Industrial Park',
+    '100 Industrial Parkway, San Francisco, CA',
+    37.7749,
+    -122.4194,
+    150,
+    'ACTIVE',
+    'e0000000-0000-0000-0000-000000000001'
+  ),
+  (
+    '80000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
+    'Commercial Tower 4 - Rooftop HVAC',
+    '450 Mission St, San Francisco, CA',
+    37.7833,
+    -122.4167,
+    100,
+    'ACTIVE',
+    'e0000000-0000-0000-0000-000000000001'
+  ),
+  (
+    '80000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000002',
+    'Tenant 2 Primary Data Center',
+    '1 Wall St, New York, NY',
+    40.7128,
+    -74.0060,
+    100,
+    'ACTIVE',
+    'e0000000-0000-0000-0000-000000000006'
+  )
+ON CONFLICT (id) DO NOTHING;
+
+-- Phase 05: Synthetic Visits
+INSERT INTO visits (id, organization_id, location_id, task_id, assigned_to, scheduled_start, scheduled_end, status, created_by)
+VALUES
+  (
+    '90000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    '80000000-0000-0000-0000-000000000001',
+    '60000000-0000-0000-0000-000000000001',
+    'e0000000-0000-0000-0000-000000000004',
+    NOW() + INTERVAL '2 hours',
+    NOW() + INTERVAL '4 hours',
+    'READY',
+    'e0000000-0000-0000-0000-000000000002'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
+    '80000000-0000-0000-0000-000000000002',
+    NULL,
+    'e0000000-0000-0000-0000-000000000005',
+    NOW() - INTERVAL '1 hour',
+    NOW() + INTERVAL '1 hour',
+    'CHECKED_IN',
+    'e0000000-0000-0000-0000-000000000003'
+  )
+ON CONFLICT (id) DO NOTHING;
+
+
 
 

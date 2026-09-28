@@ -10,10 +10,17 @@ import {
   AttendanceStatus,
   CheckInResult,
   ErrorCode,
+  LocationStatus,
+  LocationVerificationResult,
+  ProofType,
+  LocationEventType,
   UUID,
   TenantId,
   UserId,
   TeamId,
+  LocationId,
+  VisitId,
+  TaskId,
   IsoDateTime,
 } from '@fieldops/types';
 
@@ -32,6 +39,9 @@ export const uuidSchema = z
 export const tenantIdSchema = uuidSchema.transform((val) => val as unknown as TenantId);
 export const userIdSchema = uuidSchema.transform((val) => val as unknown as UserId);
 export const teamIdSchema = uuidSchema.transform((val) => val as unknown as TeamId);
+export const locationIdSchema = uuidSchema.transform((val) => val as unknown as LocationId);
+export const visitIdSchema = uuidSchema.transform((val) => val as unknown as VisitId);
+export const taskIdSchema = uuidSchema.transform((val) => val as unknown as TaskId);
 
 /**
  * Validates ISO-8601 UTC timestamp format.
@@ -97,6 +107,10 @@ export const visitStatusSchema = z.nativeEnum(VisitStatus);
 export const attendanceStatusSchema = z.nativeEnum(AttendanceStatus);
 export const checkInResultSchema = z.nativeEnum(CheckInResult);
 export const errorCodeSchema = z.nativeEnum(ErrorCode);
+export const locationStatusSchema = z.nativeEnum(LocationStatus);
+export const locationVerificationResultSchema = z.nativeEnum(LocationVerificationResult);
+export const proofTypeSchema = z.nativeEnum(ProofType);
+export const locationEventTypeSchema = z.nativeEnum(LocationEventType);
 
 // =============================================================================
 // 3. API ENVELOPE SCHEMAS
@@ -285,7 +299,122 @@ export const taskSortSchema = z.object({
 });
 
 // =============================================================================
-// 7. CONTEXT SCHEMAS
+// 7. PHASE 05 FIELD OPERATIONS, VISITS & PROOF OF WORK SCHEMAS
+// =============================================================================
+
+export const gpsCoordinatesSchema = z.object({
+  latitude: z.number().min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90'),
+  longitude: z.number().min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180'),
+  accuracyMeters: z.number().min(0, 'Accuracy cannot be negative'),
+  capturedAt: isoDateTimeSchema,
+});
+
+export const createLocationSchema = z.object({
+  name: z.string().trim().min(2, 'Name must be at least 2 characters long').max(255),
+  address: z.string().trim().max(1000).optional(),
+  latitude: z.number().min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90'),
+  longitude: z.number().min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180'),
+  allowedRadiusMeters: z.number().int().min(10, 'Allowed radius must be at least 10 meters').max(50000, 'Allowed radius cannot exceed 50,000 meters').default(100),
+});
+
+export const updateLocationSchema = z.object({
+  name: z.string().trim().min(2).max(255).optional(),
+  address: z.string().trim().max(1000).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  allowedRadiusMeters: z.number().int().min(10).max(50000).optional(),
+  status: locationStatusSchema.optional(),
+});
+
+export const createVisitSchema = z.object({
+  locationId: locationIdSchema,
+  taskId: taskIdSchema.optional(),
+  assignedTo: userIdSchema.optional(),
+  scheduledStart: isoDateTimeSchema,
+  scheduledEnd: isoDateTimeSchema.optional(),
+}).refine(
+  (data) => {
+    if (!data.scheduledEnd) return true;
+    return new Date(data.scheduledEnd).getTime() >= new Date(data.scheduledStart).getTime();
+  },
+  { message: 'scheduledEnd must be at or after scheduledStart', path: ['scheduledEnd'] }
+);
+
+export const updateVisitSchema = z.object({
+  locationId: locationIdSchema.optional(),
+  taskId: taskIdSchema.nullable().optional(),
+  assignedTo: userIdSchema.nullable().optional(),
+  scheduledStart: isoDateTimeSchema.optional(),
+  scheduledEnd: isoDateTimeSchema.nullable().optional(),
+  version: z.number({ required_error: 'Version is required for optimistic concurrency' }).int().positive('Version is required for optimistic concurrency'),
+}).refine(
+  (data) => {
+    if (!data.scheduledStart || !data.scheduledEnd) return true;
+    return new Date(data.scheduledEnd).getTime() >= new Date(data.scheduledStart).getTime();
+  },
+  { message: 'scheduledEnd must be at or after scheduledStart', path: ['scheduledEnd'] }
+);
+
+export const transitionVisitStatusSchema = z.object({
+  status: visitStatusSchema,
+  cancelReason: z.string().trim().max(1000).optional(),
+  expectedVersion: z.number().int().positive().optional(),
+});
+
+export const checkinSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracyMeters: z.number().min(0),
+  clientCapturedAt: isoDateTimeSchema,
+  exceptionReason: z.string().trim().max(1000).optional(),
+  deviceMetadata: z.record(z.unknown()).optional(),
+});
+
+export const checkoutSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracyMeters: z.number().min(0),
+  clientCapturedAt: isoDateTimeSchema,
+  notes: z.string().trim().max(5000).optional(),
+  deviceMetadata: z.record(z.unknown()).optional(),
+});
+
+export const createProofSchema = z.object({
+  proofType: proofTypeSchema,
+  storagePath: z.string().trim().optional(),
+  fileName: z.string().trim().max(255).optional(),
+  mimeType: z.string().trim().max(100).optional(),
+  fileSizeBytes: z.number().int().positive().max(25 * 1024 * 1024, 'Max proof file size is 25MB').optional(),
+  notes: z.string().trim().max(5000).optional(),
+  signerName: z.string().trim().max(100).optional(),
+  taskId: taskIdSchema.optional(),
+}).refine(
+  (data) => {
+    if (data.proofType === ProofType.PHOTO) return !!data.storagePath;
+    if (data.proofType === ProofType.SIGNATURE) return !!data.signerName && !!data.storagePath;
+    if (data.proofType === ProofType.NOTE) return !!data.notes && data.notes.trim().length > 0;
+    return true;
+  },
+  { message: 'Missing required fields for selected proof type' }
+);
+
+export const visitFilterSchema = z.object({
+  status: z.union([visitStatusSchema, z.array(visitStatusSchema)]).optional(),
+  assignedTo: userIdSchema.optional(),
+  locationId: locationIdSchema.optional(),
+  taskId: taskIdSchema.optional(),
+  isOverdue: z.coerce.boolean().optional(),
+  fromDate: isoDateTimeSchema.optional(),
+  toDate: isoDateTimeSchema.optional(),
+});
+
+export const visitSortSchema = z.object({
+  field: z.enum(['scheduledStart', 'createdAt', 'status', 'updatedAt']).default('scheduledStart'),
+  order: z.enum(['asc', 'desc']).default('asc'),
+});
+
+// =============================================================================
+// 8. CONTEXT SCHEMAS
 // =============================================================================
 
 export const tenantContextSchema = z.object({
