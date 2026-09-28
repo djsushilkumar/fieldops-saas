@@ -32,6 +32,9 @@ jobs:
       - name: Install Monorepo Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Linter Check
+        run: pnpm lint
+
       - name: TypeScript Typecheck
         run: pnpm typecheck
 
