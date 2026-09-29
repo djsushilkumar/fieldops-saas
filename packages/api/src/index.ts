@@ -216,7 +216,16 @@ export class FieldOpsApiClient {
     this.getTenantId = options.getTenantId;
     this.timeoutMs = options.timeoutMs ?? 10000;
     this.maxRetries = options.maxRetries ?? 2;
-    this.fetchImpl = options.customFetch ?? (typeof fetch !== 'undefined' ? fetch : (null as unknown as typeof fetch));
+    const rawFetch = options.customFetch
+      ?? (typeof window !== 'undefined'
+          ? window.fetch.bind(window)
+          : (typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function'
+              ? globalThis.fetch.bind(globalThis)
+              : (typeof fetch !== 'undefined' ? fetch : (null as unknown as typeof fetch))));
+
+    this.fetchImpl = (options.customFetch && typeof window !== 'undefined')
+      ? options.customFetch.bind(window)
+      : rawFetch;
   }
 
   public async get<T>(
@@ -311,7 +320,9 @@ export class FieldOpsApiClient {
       const signal = options?.signal || controller.signal;
 
       try {
-        const response = await this.fetchImpl(url.toString(), {
+        const fetchFn = this.fetchImpl || (typeof window !== 'undefined' ? window.fetch.bind(window) : globalThis.fetch);
+        const winCtx = typeof window !== 'undefined' ? window : globalThis;
+        const response = await fetchFn.call(winCtx, url.toString(), {
           method,
           headers,
           body: body !== undefined ? JSON.stringify(body) : undefined,

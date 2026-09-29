@@ -40,6 +40,7 @@ export function getApiClient(): FieldOpsApiClient {
       baseUrl: config.apiUrl,
       getAccessToken: async () => currentAccessToken,
       getTenantId: () => currentTenantId,
+      customFetch: typeof window !== 'undefined' ? window.fetch.bind(window) : undefined,
     });
   }
 
