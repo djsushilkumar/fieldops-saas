@@ -71,21 +71,33 @@ export async function PATCH(request: NextRequest) {
 
     const orgVisits = memoryDb.visits.get(tenantId) || [];
     const index = orgVisits.findIndex((v) => v.id === id);
+
+    let updatedVisit: Visit;
     if (index === -1) {
-      return NextResponse.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Visit not found' } },
-        { status: 404 }
-      );
+      updatedVisit = {
+        id: (id || `vis_${Date.now()}`) as VisitId,
+        organizationId: tenantId,
+        locationId: (body.locationId || 'loc_default') as LocationId,
+        status: body.status || VisitStatus.SCHEDULED,
+        scheduledStart: body.scheduledStart || (new Date().toISOString() as IsoDateTime),
+        scheduledEnd: body.scheduledEnd,
+        assignedTo: body.assignedTo,
+        version: 1,
+        createdBy: 'usr_owner' as UserId,
+        createdAt: new Date().toISOString() as IsoDateTime,
+        updatedAt: new Date().toISOString() as IsoDateTime,
+        ...body,
+      };
+      orgVisits.push(updatedVisit);
+    } else {
+      updatedVisit = {
+        ...orgVisits[index],
+        ...body,
+        version: orgVisits[index].version + 1,
+        updatedAt: new Date().toISOString() as IsoDateTime,
+      };
+      orgVisits[index] = updatedVisit;
     }
-
-    const updatedVisit: Visit = {
-      ...orgVisits[index],
-      ...body,
-      version: orgVisits[index].version + 1,
-      updatedAt: new Date().toISOString() as IsoDateTime,
-    };
-
-    orgVisits[index] = updatedVisit;
     memoryDb.visits.set(tenantId, orgVisits);
 
     return NextResponse.json({

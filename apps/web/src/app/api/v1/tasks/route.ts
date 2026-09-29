@@ -72,21 +72,34 @@ export async function PATCH(request: NextRequest) {
 
     const orgTasks = memoryDb.tasks.get(tenantId) || [];
     const index = orgTasks.findIndex((t) => t.id === id);
+
+    let updatedTask: Task;
     if (index === -1) {
-      return NextResponse.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } },
-        { status: 404 }
-      );
+      updatedTask = {
+        id: (id || `tsk_${Date.now()}`) as TaskId,
+        organizationId: tenantId,
+        title: body.title || 'Operational Task',
+        description: body.description,
+        status: body.status || TaskStatus.ASSIGNED,
+        priority: body.priority || Priority.MEDIUM,
+        createdBy: 'usr_owner' as UserId,
+        dueAt: body.dueAt,
+        version: 1,
+        createdAt: new Date().toISOString() as IsoDateTime,
+        updatedAt: new Date().toISOString() as IsoDateTime,
+        checklists: body.checklists || [],
+        ...body,
+      };
+      orgTasks.push(updatedTask);
+    } else {
+      updatedTask = {
+        ...orgTasks[index],
+        ...body,
+        version: orgTasks[index].version + 1,
+        updatedAt: new Date().toISOString() as IsoDateTime,
+      };
+      orgTasks[index] = updatedTask;
     }
-
-    const updatedTask: Task = {
-      ...orgTasks[index],
-      ...body,
-      version: orgTasks[index].version + 1,
-      updatedAt: new Date().toISOString() as IsoDateTime,
-    };
-
-    orgTasks[index] = updatedTask;
     memoryDb.tasks.set(tenantId, orgTasks);
 
     return NextResponse.json({
