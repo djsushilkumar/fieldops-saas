@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 32" width="160" height="32" fill="none">
+  <!-- Symbol -->
+  <g transform="translate(0, 0)">
+    <path d="M16 2.5 C10.2 2.5 5.5 7.2 5.5 13.2 C5.5 20.6 15 28.3 15.45 28.7 C15.77 28.98 16.23 28.98 16.55 28.7 C17 28.3 26.5 20.6 26.5 13.2 C26.5 7.2 21.8 2.5 16 2.5 Z" fill="#000000"/>
+    <path d="M10.5 14 L14 17.5 L21.5 10 M17.5 10 H21.5 V14" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="44" y="23" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif" font-size="21" letter-spacing="-0.02em">
+    <tspan font-weight="700" fill="#000000">Field</tspan><tspan font-weight="500" fill="#000000">Ops</tspan>
+  </text>
+</svg>
