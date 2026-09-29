@@ -28,7 +28,7 @@ export default function OrganizationSelectPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
+    <div className="mx-auto max-w-2xl p-3 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between pb-6 border-b border-border">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Your Organizations</h1>

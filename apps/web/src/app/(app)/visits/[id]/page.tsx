@@ -113,7 +113,7 @@ export default function VisitDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8 max-w-7xl mx-auto text-center text-sm text-slate-500">
+      <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto text-center text-sm text-slate-500">
         Loading field visit details...
       </div>
     );
@@ -121,7 +121,7 @@ export default function VisitDetailPage() {
 
   if (errorMessage || !visit) {
     return (
-      <div className="p-8 max-w-7xl mx-auto flex flex-col gap-4">
+      <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto flex flex-col gap-4">
         <div className="rounded-lg bg-red-50 p-4 border border-red-200 text-sm text-red-700">
           {errorMessage || 'Visit not found.'}
         </div>
@@ -136,7 +136,7 @@ export default function VisitDetailPage() {
   const checkout = visit.checkout;
 
   return (
-    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto">
+    <div className="flex flex-col gap-6 p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Navigation Breadcrumb */}
       <div className="flex items-center justify-between">
         <Link

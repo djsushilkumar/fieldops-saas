@@ -162,7 +162,7 @@ export default function VisitsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto">
+    <div className="flex flex-col gap-6 p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

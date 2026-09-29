@@ -181,7 +181,7 @@ export default function TaskDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-5xl p-8 text-center text-xs text-text-muted">
+      <div className="mx-auto max-w-5xl p-3 sm:p-6 lg:p-8 text-center text-xs text-text-muted">
         Loading task details...
       </div>
     );
@@ -189,7 +189,7 @@ export default function TaskDetailPage() {
 
   if (!task) {
     return (
-      <div className="mx-auto max-w-5xl p-8 text-center text-xs">
+      <div className="mx-auto max-w-5xl p-3 sm:p-6 lg:p-8 text-center text-xs">
         <p className="text-sm font-bold text-rose-600">Task Not Found</p>
         <p className="mt-1 text-text-muted">The requested task does not exist or access was denied.</p>
         <Link href="/tasks" className="mt-4 inline-block">
@@ -206,7 +206,7 @@ export default function TaskDetailPage() {
   const checklistProgress = totalChecks > 0 ? Math.round((completedChecks / totalChecks) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
+    <div className="mx-auto max-w-5xl p-3 sm:p-6 lg:p-8">
       {/* Back button & Breadcrumb */}
       <div className="mb-4 flex items-center justify-between text-xs">
         <Link href="/tasks" className="font-semibold text-brand-primary hover:underline flex items-center gap-1">

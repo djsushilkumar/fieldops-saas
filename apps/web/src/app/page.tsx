@@ -13,8 +13,8 @@ export default function HomePage() {
   const isAuthenticated = authState === 'AUTHENTICATED' && user;
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
-      <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
+    <div className="mx-auto max-w-4xl p-3 sm:p-6 lg:p-8">
+      <div className="rounded-xl border border-border bg-surface p-4 sm:p-6 lg:p-8 shadow-sm">
         <div className="flex items-center gap-2">
           <span className="rounded bg-brand-primary/10 px-2 py-0.5 text-xs font-bold text-brand-primary">
             Phase 03 Active
@@ -22,7 +22,7 @@ export default function HomePage() {
           <span className="text-xs text-text-muted">Identity, Multi-Tenancy & Access Control</span>
         </div>
 
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-primary">
+        <h1 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-primary">
           FieldOps Enterprise Management Platform
         </h1>
         <p className="mt-2 text-sm text-text-muted">
@@ -38,22 +38,22 @@ export default function HomePage() {
               Active Organization:{' '}
               <strong>{activeOrganization?.name || 'No tenant selected'}</strong>
             </p>
-            <div className="mt-4 flex gap-3">
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
               <Link href="/dashboard">
-                <Button variant="primary">Enter Dashboard →</Button>
+                <Button variant="primary" className="w-full sm:w-auto">Enter Dashboard →</Button>
               </Link>
               <Link href="/org/select">
-                <Button variant="secondary">Switch Workspace</Button>
+                <Button variant="secondary" className="w-full sm:w-auto">Switch Workspace</Button>
               </Link>
             </div>
           </div>
         ) : (
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <Link href="/login">
-              <Button variant="primary">Sign In</Button>
+              <Button variant="primary" className="w-full sm:w-auto">Sign In</Button>
             </Link>
             <Link href="/signup">
-              <Button variant="secondary">Create Tenant Workspace</Button>
+              <Button variant="secondary" className="w-full sm:w-auto">Create Tenant Workspace</Button>
             </Link>
           </div>
         )}

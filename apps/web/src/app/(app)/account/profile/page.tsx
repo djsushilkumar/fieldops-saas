@@ -50,7 +50,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
+    <div className="mx-auto max-w-2xl p-3 sm:p-6 lg:p-8">
       <div className="pb-6 border-b border-border">
         <h1 className="text-2xl font-bold tracking-tight text-primary">Your Profile</h1>
         <p className="mt-1 text-sm text-text-muted">

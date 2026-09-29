@@ -277,7 +277,7 @@ export default function AttendancePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8 space-y-6">
       {/* Page Header */}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b border-border pb-5">
         <div>

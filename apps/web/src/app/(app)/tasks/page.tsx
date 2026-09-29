@@ -171,7 +171,7 @@ export default function TasksPage() {
   const statusOptions = ['ALL', ...Object.values(TaskStatus)];
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
+    <div className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8">
       {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-border">
         <div>
@@ -286,7 +286,8 @@ export default function TasksPage() {
             <p className="mt-1">Try adjusting your filters or create a new task to get started.</p>
           </div>
         ) : (
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full min-w-[650px] text-left text-xs">
             <thead className="border-b border-border bg-slate-50 text-text-muted">
               <tr>
                 <th className="px-6 py-3 font-semibold">Title</th>
@@ -374,6 +375,7 @@ export default function TasksPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

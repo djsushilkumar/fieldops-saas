@@ -179,7 +179,7 @@ export default function OperationalMapPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-6 sm:p-8 space-y-6">
+    <div className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-border">
         <div>
@@ -460,7 +460,8 @@ export default function OperationalMapPage() {
       ) : (
         /* Accessible Table / List View */
         <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full min-w-[650px] text-left text-xs">
             <thead className="border-b border-border bg-slate-50 text-text-muted">
               <tr>
                 <th className="px-6 py-3 font-semibold">Entity Type</th>
@@ -516,6 +517,7 @@ export default function OperationalMapPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

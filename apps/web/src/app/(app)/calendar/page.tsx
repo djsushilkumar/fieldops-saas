@@ -190,7 +190,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-6 sm:p-8 space-y-6">
+    <div className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8 space-y-6">
       {/* Header and Controls */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-border">
         <div>
@@ -327,7 +327,9 @@ export default function CalendarPage() {
       ) : viewMode === 'WEEK' ? (
         /* Week Grid */
         <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-700">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[700px] lg:min-w-0">
+              <div className="grid grid-cols-7 border-b border-border bg-slate-50 text-center text-xs font-semibold text-slate-700">
             {weekDates.map((d, i) => {
               const isToday = getLocalDateString(d) === getLocalDateString(new Date());
               return (
@@ -388,6 +390,8 @@ export default function CalendarPage() {
                 </div>
               );
             })}
+          </div>
+            </div>
           </div>
         </div>
       ) : (

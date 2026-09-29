@@ -113,8 +113,8 @@ export default function MembersPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
-      <div className="flex items-center justify-between pb-6 border-b border-border">
+    <div className="mx-auto max-w-5xl p-3 sm:p-6 lg:p-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-border">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary">Members & Access Control</h1>
           <p className="mt-1 text-sm text-text-muted">
@@ -222,7 +222,8 @@ export default function MembersPage() {
             No active members found for this organization.
           </div>
         ) : (
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full min-w-[500px] text-left text-xs">
             <thead className="border-b border-border bg-slate-50 font-semibold text-text-muted">
               <tr>
                 <th className="px-4 py-3">Member</th>
@@ -314,6 +315,7 @@ export default function MembersPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

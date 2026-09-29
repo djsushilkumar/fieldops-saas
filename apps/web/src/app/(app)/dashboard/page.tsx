@@ -139,9 +139,9 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl p-6 sm:p-8 space-y-8">
+    <div className="mx-auto max-w-7xl p-3 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
       {/* Top Banner & Operational Context */}
-      <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-surface p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2">
