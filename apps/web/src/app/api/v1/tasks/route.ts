@@ -62,3 +62,41 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const tenantId = (request.headers.get('x-tenant-id') ||
+      request.cookies.get('fieldops_active_org_id')?.value || 'default') as TenantId;
+    const body = await request.json();
+    const id = body.id || request.nextUrl.searchParams.get('id');
+
+    const orgTasks = memoryDb.tasks.get(tenantId) || [];
+    const index = orgTasks.findIndex((t) => t.id === id);
+    if (index === -1) {
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } },
+        { status: 404 }
+      );
+    }
+
+    const updatedTask: Task = {
+      ...orgTasks[index],
+      ...body,
+      version: orgTasks[index].version + 1,
+      updatedAt: new Date().toISOString() as IsoDateTime,
+    };
+
+    orgTasks[index] = updatedTask;
+    memoryDb.tasks.set(tenantId, orgTasks);
+
+    return NextResponse.json({
+      success: true,
+      data: updatedTask,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },
+      { status: 500 }
+    );
+  }
+}
