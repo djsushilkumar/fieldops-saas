@@ -281,7 +281,15 @@ export class FieldOpsApiClient {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}` as RequestId;
 
     const executeCall = async (): Promise<T> => {
-      const url = new URL(`${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`);
+      const normalizedBase = this.baseUrl.replace(/\/+$/, '');
+      let normalizedPath = path.startsWith('/') ? path : `/${path}`;
+      if (normalizedBase.endsWith('/api/v1') && normalizedPath.startsWith('/api/v1/')) {
+        normalizedPath = normalizedPath.substring(7);
+      } else if (normalizedBase.endsWith('/api/v1') && normalizedPath === '/api/v1') {
+        normalizedPath = '';
+      }
+      const defaultOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      const url = new URL(`${normalizedBase || defaultOrigin}${normalizedPath}`, defaultOrigin);
 
       if (options?.query) {
         for (const [k, v] of Object.entries(options.query)) {

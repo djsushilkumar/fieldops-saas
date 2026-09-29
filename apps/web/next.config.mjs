@@ -45,7 +45,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co https://api.fieldops.io",
+              "connect-src 'self' https://*.supabase.co https://*.supabase.net https://*.supabase.in https://*.vercel.app https://api.fieldops.io",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
