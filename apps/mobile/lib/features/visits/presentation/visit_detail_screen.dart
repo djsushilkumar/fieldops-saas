@@ -300,6 +300,29 @@ class _VisitDetailScreenState extends ConsumerState<VisitDetailScreen> {
                         ),
                       ],
                     ),
+                    if (location != null) ...[
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Navigating to ${location.name} via Google Maps (${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)})',
+                              ),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.navigation_outlined, size: 16),
+                        label: const Text(
+                          'Navigate with Google Maps',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(36),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

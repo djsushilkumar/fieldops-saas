@@ -31,6 +31,7 @@ enum LocationVerificationResult {
   lowAccuracy,
   locationUnavailable,
   staleLocation,
+  mockLocationDetected,
   permissionDenied;
 
   static LocationVerificationResult fromString(String val) {
@@ -43,6 +44,8 @@ enum LocationVerificationResult {
         return LocationVerificationResult.locationUnavailable;
       case 'STALE_LOCATION':
         return LocationVerificationResult.staleLocation;
+      case 'MOCK_LOCATION_DETECTED':
+        return LocationVerificationResult.mockLocationDetected;
       case 'PERMISSION_DENIED':
         return LocationVerificationResult.permissionDenied;
       case 'VALID':
@@ -63,6 +66,8 @@ enum LocationVerificationResult {
         return 'LOCATION_UNAVAILABLE';
       case LocationVerificationResult.staleLocation:
         return 'STALE_LOCATION';
+      case LocationVerificationResult.mockLocationDetected:
+        return 'MOCK_LOCATION_DETECTED';
       case LocationVerificationResult.permissionDenied:
         return 'PERMISSION_DENIED';
     }
@@ -75,12 +80,14 @@ class GpsCoordinatesModel {
   final double longitude;
   final double accuracyMeters;
   final DateTime capturedAt;
+  final bool isMocked;
 
   const GpsCoordinatesModel({
     required this.latitude,
     required this.longitude,
     required this.accuracyMeters,
     required this.capturedAt,
+    this.isMocked = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -88,6 +95,7 @@ class GpsCoordinatesModel {
         'longitude': longitude,
         'accuracy_meters': accuracyMeters,
         'client_captured_at': capturedAt.toUtc().toIso8601String(),
+        'is_mocked': isMocked,
       };
 
   factory GpsCoordinatesModel.fromJson(Map<String, dynamic> json) =>
@@ -96,6 +104,7 @@ class GpsCoordinatesModel {
         longitude: (json['longitude'] as num).toDouble(),
         accuracyMeters: (json['accuracy_meters'] as num).toDouble(),
         capturedAt: DateTime.parse(json['client_captured_at'] as String),
+        isMocked: json['is_mocked'] as bool? ?? false,
       );
 }
 
@@ -223,7 +232,10 @@ class GeofenceService {
     LocationVerificationResult result = LocationVerificationResult.valid;
     String? message;
 
-    if (!isFresh) {
+    if (workerCoords.isMocked) {
+      result = LocationVerificationResult.mockLocationDetected;
+      message = 'Mock GPS location detected. Please disable fake GPS applications.';
+    } else if (!isFresh) {
       result = LocationVerificationResult.staleLocation;
       message = 'GPS fix is stale (${ageSeconds}s old). Acquire a fresh fix.';
     } else if (!isAccurate) {

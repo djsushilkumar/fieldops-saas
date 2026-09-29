@@ -440,15 +440,23 @@ export default function OperationalMapPage() {
                   </div>
                 )}
 
-                {selectedPin.linkHref && (
-                  <div className="pt-2">
+                <div className="pt-2 flex flex-col gap-2">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPin.latitude},${selectedPin.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 w-full rounded-md border border-slate-300 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-colors text-center"
+                  >
+                    🗺️ Open in Google Maps ↗
+                  </a>
+                  {selectedPin.linkHref && (
                     <Link href={selectedPin.linkHref}>
                       <Button variant="primary" className="w-full text-xs">
                         Open Full Details →
                       </Button>
                     </Link>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ) : (
               <div className="py-12 text-center text-xs text-text-muted">
@@ -505,13 +513,24 @@ export default function OperationalMapPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {pin.linkHref && (
-                      <Link href={pin.linkHref}>
-                        <Button variant="secondary" className="h-7 px-2.5 text-xs">
-                          View
-                        </Button>
-                      </Link>
-                    )}
+                    <div className="flex items-center justify-end gap-3">
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${pin.latitude},${pin.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-primary hover:underline"
+                        title="Open in Google Maps"
+                      >
+                        Google Maps ↗
+                      </a>
+                      {pin.linkHref && (
+                        <Link href={pin.linkHref}>
+                          <Button variant="secondary" className="h-7 px-2.5 text-xs">
+                            View
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
