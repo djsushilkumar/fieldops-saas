@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryDb } from '@/lib/server-store';
+import { memoryDb, ensureTenantSeeded } from '@/lib/server-store';
 import { AttendanceRecord, AttendanceStatus, AttendanceId, TenantId, UserId, IsoDateTime } from '@fieldops/types';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
   const tenantId = request.headers.get('x-tenant-id') ||
     request.cookies.get('fieldops_active_org_id')?.value || 'default';
 
+  ensureTenantSeeded(tenantId);
   const orgRecords = memoryDb.attendance.get(tenantId) || [];
 
   return NextResponse.json({

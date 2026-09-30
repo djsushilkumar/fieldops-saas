@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryDb } from '@/lib/server-store';
+import { memoryDb, ensureTenantSeeded } from '@/lib/server-store';
 import { Task, TaskStatus, Priority, TaskId, TenantId, UserId, IsoDateTime } from '@fieldops/types';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
   const tenantId = request.headers.get('x-tenant-id') ||
     request.cookies.get('fieldops_active_org_id')?.value || 'default';
 
+  ensureTenantSeeded(tenantId);
   const orgTasks = memoryDb.tasks.get(tenantId) || [];
 
   return NextResponse.json({
@@ -40,6 +41,10 @@ export async function POST(request: NextRequest) {
       status: body.status || TaskStatus.ASSIGNED,
       priority: body.priority || Priority.MEDIUM,
       createdBy: 'usr_owner' as UserId,
+      assignedTo: body.assignedTo,
+      assignedToName: body.assignedToName,
+      locationId: body.locationId,
+      locationName: body.locationName,
       dueAt: body.dueAt,
       version: 1,
       createdAt: now,

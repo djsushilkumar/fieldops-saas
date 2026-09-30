@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryDb } from '@/lib/server-store';
+import { memoryDb, ensureTenantSeeded } from '@/lib/server-store';
 import { Visit, VisitStatus, VisitId, TenantId, UserId, LocationId, IsoDateTime } from '@fieldops/types';
 
 export const dynamic = 'force-dynamic';
@@ -8,14 +8,28 @@ export async function GET(request: NextRequest) {
   const tenantId = request.headers.get('x-tenant-id') ||
     request.cookies.get('fieldops_active_org_id')?.value || 'default';
 
+  ensureTenantSeeded(tenantId);
   const orgVisits = memoryDb.visits.get(tenantId) || [];
+  const orgLocations = memoryDb.locations.get(tenantId) || [];
+
+  const populatedVisits = orgVisits.map((v) => ({
+    ...v,
+    location: v.location || orgLocations.find((l) => l.id === v.locationId) || {
+      id: v.locationId,
+      name: 'Client Site',
+      address: 'On-site authorized facility',
+      latitude: 28.5355,
+      longitude: 77.2680,
+      allowedRadiusMeters: 100,
+    },
+  }));
 
   return NextResponse.json({
     success: true,
     data: {
-      items: orgVisits,
+      items: populatedVisits,
       pagination: {
-        total: orgVisits.length,
+        total: populatedVisits.length,
         page: 1,
         pageSize: 50,
         hasMore: false,

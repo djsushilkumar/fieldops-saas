@@ -314,7 +314,10 @@ export interface Task {
   readonly priority: Priority;
   readonly createdBy: UserId;
   readonly assignedTo?: UserId;
+  readonly assignedToName?: string;
   readonly assignedTeam?: TeamId;
+  readonly locationId?: LocationId;
+  readonly locationName?: string;
   readonly dueAt?: IsoDateTime;
   readonly blockedReason?: string;
   readonly version: number;
