@@ -40,6 +40,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
+          cache-dependency-path: 'apps/mobile/android/**/*.gradle*'
 
       - name: Setup Android SDK Tools & Accept Licenses
         uses: android-actions/setup-android@v3
@@ -57,7 +58,7 @@ jobs:
         run: flutter pub get
 
       - name: Decode Android Keystore
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -91,6 +92,7 @@ jobs:
       - name: Compute Artifact Hashes (SHA-256)
         run: |
           mkdir -p ../../dist/android
+          touch ../../dist/android/SHA256SUMS.txt
           cp build/app/outputs/flutter-apk/app-release.apk ../../dist/android/fieldops-v1.0.0-rc.1.apk || true
           cp build/app/outputs/bundle/release/app-release.aab ../../dist/android/fieldops-v1.0.0-rc.1.aab || true
           cd ../../dist/android
@@ -101,6 +103,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fieldops-android-v1.0.0-rc.1
+          if-no-files-found: warn
           path: |
             dist/android/*.apk
             dist/android/*.aab
@@ -134,10 +137,12 @@ jobs:
       - name: Install Mobile Dependencies & CocoaPods
         run: |
           flutter pub get
-          cd ios && pod install --repo-update && cd ..
+          if [ -d "ios" ]; then
+            cd ios && pod install --repo-update && cd ..
+          fi
 
       - name: Install Apple Distribution Certificate & Profile
-        if: env.IOS_CERTIFICATE_BASE64 != ''
+        if: ${{ secrets.IOS_CERTIFICATE_BASE64 != '' }}
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
@@ -161,16 +166,21 @@ jobs:
 
       - name: Build iOS Release Archive (IPA)
         run: |
-          flutter build ipa --release \
-            --build-name=1.0.0 \
-            --build-number=1 \
-            --dart-define=ENVIRONMENT=staging \
-            --dart-define=API_URL=https://staging-api.fieldops.com \
-            --export-options-plist=ios/ExportOptions.plist || flutter build ios --release --no-codesign
+          if [ -f "ios/ExportOptions.plist" ] && [ -n "${{ secrets.IOS_CERTIFICATE_BASE64 }}" ]; then
+            flutter build ipa --release \
+              --build-name=1.0.0 \
+              --build-number=1 \
+              --dart-define=ENVIRONMENT=staging \
+              --dart-define=API_URL=https://staging-api.fieldops.com \
+              --export-options-plist=ios/ExportOptions.plist || flutter build ios --release --no-codesign
+          else
+            flutter build ios --release --no-codesign
+          fi
 
       - name: Compute Artifact Hashes (SHA-256)
         run: |
           mkdir -p ../../dist/ios
+          touch ../../dist/ios/SHA256SUMS.txt
           cp build/ios/ipa/*.ipa ../../dist/ios/fieldops-v1.0.0-rc.1.ipa || true
           cp -r build/ios/archive/Runner.xcarchive/dSYMs ../../dist/ios/ || true
           cd ../../dist/ios
@@ -181,6 +191,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fieldops-ios-v1.0.0-rc.1
+          if-no-files-found: warn
           path: |
             dist/ios/*.ipa
             dist/ios/SHA256SUMS.txt
