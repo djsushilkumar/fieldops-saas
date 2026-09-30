@@ -99,6 +99,37 @@ class AuthNotifier extends StateNotifier<AuthStatusState> {
     }
   }
 
+  Future<void> signInWithDemo() async {
+    state = state.copyWith(authState: AuthState.authenticating, clearError: true);
+    const demoOrg = Organization(
+      id: 'org_fieldops_demo',
+      name: 'FieldOps Demonstration Team',
+      slug: 'fieldops-demo',
+      subscriptionTier: 'GROWTH',
+    );
+    const demoMembership = Membership(
+      id: 'mem_demo_01',
+      organizationId: 'org_fieldops_demo',
+      userId: 'usr_demo_fieldworker',
+      role: 'FIELD_WORKER',
+      status: 'ACTIVE',
+      organization: demoOrg,
+    );
+    const demoUser = UserProfile(
+      id: 'usr_demo_fieldworker',
+      email: 'worker@fieldops.io',
+      fullName: 'Demo Field Worker',
+      timezone: 'UTC',
+    );
+
+    state = const AuthStatusState(
+      authState: AuthState.authenticated,
+      user: demoUser,
+      activeMembership: demoMembership,
+      memberships: [demoMembership],
+    );
+  }
+
   Future<void> switchOrganization(String organizationId) async {
     final match = state.memberships.firstWhere(
       (m) => m.organizationId == organizationId,

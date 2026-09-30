@@ -41,6 +41,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _handleDemoLogin() async {
+    await ref.read(authNotifierProvider.notifier).signInWithDemo();
+    if (mounted) {
+      context.go(RoutePaths.home);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
@@ -193,6 +200,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               'Sign In to FieldOps',
                               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                             ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Demo Mode Divider
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                          child: Text(
+                            'OR',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Demo Mode Button
+                    OutlinedButton.icon(
+                      onPressed: isLoading ? null : _handleDemoLogin,
+                      icon: const Icon(Icons.play_circle_outline, color: Color(0xFF0284C7)),
+                      label: const Text(
+                        'Explore Demo Mode (Offline)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0284C7),
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                     ),
                   ],
                 ),
