@@ -42,11 +42,6 @@ jobs:
           cache: 'gradle'
           cache-dependency-path: 'apps/mobile/android/**/*.gradle*'
 
-      - name: Setup Android SDK Tools & Accept Licenses
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 11076708 # latest commandline tools
-
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
@@ -135,10 +130,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install Mobile Dependencies & CocoaPods
+      - name: Install Mobile Dependencies
         run: |
           flutter pub get
-          if [ -d "ios" ]; then
+          if [ -f "ios/Podfile" ]; then
             cd ios && pod install --repo-update && cd ..
           fi
 
