@@ -19,7 +19,16 @@ class AuthRepository {
     http.Client? httpClient,
   })  : _secureStorage = secureStorage,
         _baseUrl = baseUrl,
-        _httpClient = httpClient ?? http.Client();
+    _httpClient = httpClient ?? http.Client();
+
+  String _buildUrl(String path) {
+    final cleanPath = path.startsWith('/') ? path : '/$path';
+    final cleanBase = _baseUrl.replaceAll(RegExp(r'/+$'), '');
+    if (cleanBase.endsWith('/api/v1') && cleanPath.startsWith('/api/v1/')) {
+      return '$cleanBase${cleanPath.substring(7)}';
+    }
+    return '$cleanBase$cleanPath';
+  }
 
   /// Authenticates using email and password, persisting tokens securely.
   Future<AuthSession> signIn({
@@ -32,7 +41,7 @@ class AuthRepository {
     }
 
     try {
-      final url = Uri.parse('$_baseUrl/api/v1/auth/login');
+      final url = Uri.parse(_buildUrl('/api/v1/auth/login'));
       final response = await _httpClient.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -74,7 +83,7 @@ class AuthRepository {
     }
 
     try {
-      final url = Uri.parse('$_baseUrl/api/v1/auth/session');
+      final url = Uri.parse(_buildUrl('/api/v1/auth/session'));
       final tenantId = await _secureStorage.readSecret(keyActiveTenantId);
 
       final headers = {
@@ -110,7 +119,7 @@ class AuthRepository {
     try {
       final token = await _secureStorage.readSecret(keyAccessToken);
       if (token != null) {
-        final url = Uri.parse('$_baseUrl/api/v1/auth/logout');
+        final url = Uri.parse(_buildUrl('/api/v1/auth/logout'));
         await _httpClient.post(
           url,
           headers: {'Authorization': 'Bearer $token'},

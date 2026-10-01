@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/storage/in_memory_secure_storage.dart';
 import '../../../core/storage/secure_storage_contract.dart';
 import '../data/auth_repository.dart';
@@ -42,13 +43,21 @@ class AuthStatusState {
   }
 }
 
+final appConfigProvider = Provider<AppConfig>((ref) {
+  return AppConfig.fromEnvironment();
+});
+
 final secureStorageProvider = Provider<SecureStorageContract>((ref) {
   return InMemorySecureStorage();
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final secureStorage = ref.watch(secureStorageProvider);
-  return AuthRepository(secureStorage: secureStorage);
+  final config = ref.watch(appConfigProvider);
+  return AuthRepository(
+    secureStorage: secureStorage,
+    baseUrl: config.apiUrl,
+  );
 });
 
 class AuthNotifier extends StateNotifier<AuthStatusState> {

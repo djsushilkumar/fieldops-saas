@@ -50,13 +50,14 @@ export function getSupabaseServiceRoleKey(): string {
 
 export function isSupabaseConfigured(): boolean {
   const url = getSupabaseUrl();
-  const anonKey = getSupabaseAnonKey();
-  const serviceKey = getSupabaseServiceRoleKey();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   return Boolean(
     url &&
     !url.includes('placeholder') &&
     (anonKey || serviceKey) &&
-    !anonKey.includes('placeholder')
+    !anonKey?.includes('placeholder') &&
+    !serviceKey?.includes('placeholder')
   );
 }
 
@@ -68,7 +69,7 @@ let cachedAdminClient: SupabaseClient | null = null;
  */
 export function getSupabaseAdminClient(): SupabaseClient {
   const url = getSupabaseUrl();
-  const serviceKey = getSupabaseServiceRoleKey();
+  const serviceKey = getSupabaseServiceRoleKey() || 'placeholder-service-key-for-offline';
 
   if (!cachedAdminClient) {
     cachedAdminClient = createClient(url, serviceKey, {
@@ -89,7 +90,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
  */
 export function getSupabaseUserClient(accessToken: string): SupabaseClient {
   const url = getSupabaseUrl();
-  const anonKey = getSupabaseAnonKey();
+  const anonKey = getSupabaseAnonKey() || 'placeholder-anon-key-for-offline';
 
   return createClient(url, anonKey, {
     auth: {
