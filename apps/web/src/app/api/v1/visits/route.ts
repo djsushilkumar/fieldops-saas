@@ -1,123 +1,209 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryDb, ensureTenantSeeded } from '@/lib/server-store';
-import { Visit, VisitStatus, VisitId, TenantId, UserId, LocationId, IsoDateTime } from '@fieldops/types';
+import { requireTenantContext } from '@/lib/auth-guards';
+import {
+  getSupabaseAdminClient,
+  mapDbVisitToVisit,
+  isSupabaseConfigured,
+} from '@/lib/supabase-server';
+import { Visit, VisitStatus, VisitId, TenantId, UserId, LocationId, IsoDateTime, UserRole } from '@fieldops/types';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const tenantId = request.headers.get('x-tenant-id') ||
-    request.cookies.get('fieldops_active_org_id')?.value || 'default';
+  const guardResult = await requireTenantContext(request);
+  if (!guardResult.success) {
+    return guardResult.response;
+  }
 
-  ensureTenantSeeded(tenantId);
-  const orgVisits = memoryDb.visits.get(tenantId) || [];
-  const orgLocations = memoryDb.locations.get(tenantId) || [];
+  const { tenantId, user, role } = guardResult.context;
+  const adminClient = getSupabaseAdminClient();
 
-  const populatedVisits = orgVisits.map((v) => ({
-    ...v,
-    location: v.location || orgLocations.find((l) => l.id === v.locationId) || {
-      id: v.locationId,
-      name: 'Client Site',
-      address: 'On-site authorized facility',
-      latitude: 28.5355,
-      longitude: 77.2680,
-      allowedRadiusMeters: 100,
-    },
-  }));
+  const searchParams = request.nextUrl.searchParams;
+  const statusFilter = searchParams.get('status');
+  const assignedToFilter = searchParams.get('assignedTo');
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '50', 10)));
+  const offset = (page - 1) * pageSize;
+
+  if (isSupabaseConfigured()) {
+    try {
+      let query = adminClient
+        .from('visits')
+        .select('*, locations(*)', { count: 'exact' })
+        .eq('organization_id', tenantId);
+
+      // Field Worker authority boundary: only see own visits
+      if (role === UserRole.FIELD_WORKER) {
+        query = query.eq('assigned_to', user.id);
+      } else if (assignedToFilter) {
+        query = query.eq('assigned_to', assignedToFilter);
+      }
+
+      if (statusFilter) {
+        query = query.eq('status', statusFilter);
+      }
+
+      query = query
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+
+      const { data: visitRows, count, error } = await query;
+
+      if (error) {
+        return NextResponse.json(
+          { success: false, error: { code: 'DATABASE_ERROR', message: error.message } },
+          { status: 500 }
+        );
+      }
+
+      const visitIds = (visitRows || []).map((v: any) => v.id);
+      let checkinsMap = new Map<string, any>();
+      let checkoutsMap = new Map<string, any>();
+      let proofsMap = new Map<string, any[]>();
+
+      if (visitIds.length > 0) {
+        const [cinRes, coutRes, prfRes] = await Promise.all([
+          adminClient.from('visit_checkins').select('*').in('visit_id', visitIds),
+          adminClient.from('visit_checkouts').select('*').in('visit_id', visitIds),
+          adminClient.from('visit_proofs').select('*').in('visit_id', visitIds),
+        ]);
+
+        (cinRes.data || []).forEach((cin: any) => checkinsMap.set(cin.visit_id, cin));
+        (coutRes.data || []).forEach((cout: any) => checkoutsMap.set(cout.visit_id, cout));
+        (prfRes.data || []).forEach((p: any) => {
+          const list = proofsMap.get(p.visit_id) || [];
+          list.push(p);
+          proofsMap.set(p.visit_id, list);
+        });
+      }
+
+      const visits = (visitRows || []).map((v: any) =>
+        mapDbVisitToVisit(
+          v,
+          v.locations,
+          proofsMap.get(v.id) || [],
+          checkinsMap.get(v.id),
+          checkoutsMap.get(v.id)
+        )
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          items: visits,
+          pagination: {
+            total: count || visits.length,
+            page,
+            pageSize,
+            hasMore: (count || 0) > offset + visits.length,
+          },
+        },
+      });
+    } catch (err: any) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },
+        { status: 500 }
+      );
+    }
+  }
 
   return NextResponse.json({
     success: true,
-    data: {
-      items: populatedVisits,
-      pagination: {
-        total: populatedVisits.length,
-        page: 1,
-        pageSize: 50,
-        hasMore: false,
-      },
-    },
+    data: { items: [], pagination: { total: 0, page: 1, pageSize: 50, hasMore: false } },
   });
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const tenantId = (request.headers.get('x-tenant-id') ||
-      request.cookies.get('fieldops_active_org_id')?.value || 'default') as TenantId;
-    const body = await request.json();
-    const now = new Date().toISOString() as IsoDateTime;
-    const visitId = `vis_${Date.now()}_${Math.random().toString(36).substring(2, 7)}` as VisitId;
+  const guardResult = await requireTenantContext(request, [
+    UserRole.OWNER,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+  ]);
+  if (!guardResult.success) {
+    return guardResult.response;
+  }
 
-    const visit: Visit = {
-      id: visitId,
+  const { tenantId, user } = guardResult.context;
+  const adminClient = getSupabaseAdminClient();
+
+  try {
+    const body = await request.json();
+    const locationId = body?.locationId;
+
+    if (!locationId) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Location ID is required' } },
+        { status: 400 }
+      );
+    }
+
+    if (isSupabaseConfigured()) {
+      // 1. Verify location exists and belongs to this tenant
+      const { data: loc, error: locErr } = await adminClient
+        .from('locations')
+        .select('*')
+        .eq('id', locationId)
+        .eq('organization_id', tenantId)
+        .maybeSingle();
+
+      if (locErr || !loc) {
+        return NextResponse.json(
+          { success: false, error: { code: 'NOT_FOUND', message: 'Assigned location does not exist in this organization' } },
+          { status: 404 }
+        );
+      }
+
+      const { data: inserted, error: insertErr } = await adminClient
+        .from('visits')
+        .insert({
+          organization_id: tenantId,
+          location_id: locationId,
+          assigned_to: body.assignedTo || null,
+          status: body.status || VisitStatus.SCHEDULED,
+          scheduled_start: body.scheduledStart || new Date().toISOString(),
+          scheduled_end: body.scheduledEnd || null,
+          notes: body.notes || null,
+          version: 1,
+        })
+        .select('*, locations(*)')
+        .single();
+
+      if (insertErr || !inserted) {
+        return NextResponse.json(
+          { success: false, error: { code: 'DATABASE_ERROR', message: insertErr?.message || 'Failed to create visit' } },
+          { status: 500 }
+        );
+      }
+
+      await adminClient.from('visit_activities').insert({
+        visit_id: inserted.id,
+        organization_id: tenantId,
+        actor_id: user.id,
+        action: 'VISIT_CREATED',
+        details: { locationId, assignedTo: body.assignedTo },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: mapDbVisitToVisit(inserted, inserted.locations),
+      });
+    }
+
+    const fallbackVisit: Visit = {
+      id: `vis_${Date.now()}` as VisitId,
       organizationId: tenantId,
-      locationId: (body.locationId || 'loc_default') as LocationId,
+      locationId,
+      createdBy: user.id,
       status: body.status || VisitStatus.SCHEDULED,
-      scheduledStart: body.scheduledStart || body.scheduledStartTime || now,
-      scheduledEnd: body.scheduledEnd || body.scheduledEndTime,
-      assignedTo: body.assignedTo as UserId | undefined,
+      scheduledStart: body.scheduledStart || (new Date().toISOString() as IsoDateTime),
+      assignedTo: body.assignedTo,
       version: 1,
-      createdBy: 'usr_owner' as UserId,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date().toISOString() as IsoDateTime,
+      updatedAt: new Date().toISOString() as IsoDateTime,
     };
 
-    const orgVisits = memoryDb.visits.get(tenantId) || [];
-    orgVisits.unshift(visit);
-    memoryDb.visits.set(tenantId, orgVisits);
-
-    return NextResponse.json({
-      success: true,
-      data: visit,
-    });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PATCH(request: NextRequest) {
-  try {
-    const tenantId = (request.headers.get('x-tenant-id') ||
-      request.cookies.get('fieldops_active_org_id')?.value || 'default') as TenantId;
-    const body = await request.json();
-    const id = body.id || request.nextUrl.searchParams.get('id');
-
-    const orgVisits = memoryDb.visits.get(tenantId) || [];
-    const index = orgVisits.findIndex((v) => v.id === id);
-
-    let updatedVisit: Visit;
-    if (index === -1) {
-      updatedVisit = {
-        id: (id || `vis_${Date.now()}`) as VisitId,
-        organizationId: tenantId,
-        locationId: (body.locationId || 'loc_default') as LocationId,
-        status: body.status || VisitStatus.SCHEDULED,
-        scheduledStart: body.scheduledStart || (new Date().toISOString() as IsoDateTime),
-        scheduledEnd: body.scheduledEnd,
-        assignedTo: body.assignedTo,
-        version: 1,
-        createdBy: 'usr_owner' as UserId,
-        createdAt: new Date().toISOString() as IsoDateTime,
-        updatedAt: new Date().toISOString() as IsoDateTime,
-        ...body,
-      };
-      orgVisits.push(updatedVisit);
-    } else {
-      updatedVisit = {
-        ...orgVisits[index],
-        ...body,
-        version: orgVisits[index].version + 1,
-        updatedAt: new Date().toISOString() as IsoDateTime,
-      };
-      orgVisits[index] = updatedVisit;
-    }
-    memoryDb.visits.set(tenantId, orgVisits);
-
-    return NextResponse.json({
-      success: true,
-      data: updatedVisit,
-    });
+    return NextResponse.json({ success: true, data: fallbackVisit });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },

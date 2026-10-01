@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryDb, ensureTenantSeeded } from '@/lib/server-store';
-import { TenantId, VisitActivity, UUID, IsoDateTime, VisitId, UserId } from '@fieldops/types';
+import { requireTenantContext } from '@/lib/auth-guards';
+import {
+  getSupabaseAdminClient,
+  mapDbProfileToUserProfile,
+  isSupabaseConfigured,
+} from '@/lib/supabase-server';
+import { VisitActivity, UUID, IsoDateTime, VisitId, UserId } from '@fieldops/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,51 +13,61 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const tenantId = (request.headers.get('x-tenant-id') ||
-    request.cookies.get('fieldops_active_org_id')?.value || 'default') as TenantId;
-  ensureTenantSeeded(tenantId);
-
-  const orgVisits = memoryDb.visits.get(tenantId) || [];
-  const visit = orgVisits.find((v) => v.id === params.id);
-
-  const activities: VisitActivity[] = [
-    {
-      id: `act_vis_${params.id}_1` as UUID,
-      visitId: params.id as VisitId,
-      organizationId: tenantId,
-      actorId: 'usr_owner' as UserId,
-      action: 'VISIT_SCHEDULED',
-      details: { scheduledStart: visit?.scheduledStart },
-      createdAt: visit?.createdAt || new Date().toISOString() as IsoDateTime,
-    },
-  ];
-
-  if (visit?.checkin) {
-    activities.push({
-      id: `act_vis_${params.id}_2` as UUID,
-      visitId: params.id as VisitId,
-      organizationId: tenantId,
-      actorId: (visit.assignedTo || 'usr_tech_rajesh') as UserId,
-      action: 'VISIT_CHECKED_IN',
-      details: {
-        distanceMeters: visit.checkin.distanceMeters,
-        verificationResult: visit.checkin.verificationResult,
-      },
-      createdAt: (visit.checkin as any).capturedAt || (visit.checkin as any).clientCapturedAt || new Date().toISOString() as IsoDateTime,
-    });
+  const guardResult = await requireTenantContext(request);
+  if (!guardResult.success) {
+    return guardResult.response;
   }
 
-  if (visit?.checkout) {
-    activities.push({
-      id: `act_vis_${params.id}_3` as UUID,
-      visitId: params.id as VisitId,
-      organizationId: tenantId,
-      actorId: (visit.assignedTo || 'usr_tech_rajesh') as UserId,
-      action: 'VISIT_CHECKED_OUT',
-      details: { notes: visit.checkout.notes },
-      createdAt: (visit.checkout as any).capturedAt || (visit.checkout as any).clientCapturedAt || new Date().toISOString() as IsoDateTime,
-    });
+  const { tenantId } = guardResult.context;
+  const adminClient = getSupabaseAdminClient();
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { data: activities, error } = await adminClient
+        .from('visit_activities')
+        .select('*')
+        .eq('visit_id', params.id)
+        .eq('organization_id', tenantId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return NextResponse.json(
+          { success: false, error: { code: 'DATABASE_ERROR', message: error.message } },
+          { status: 500 }
+        );
+      }
+
+      const actorIds = (activities || []).map((a: any) => a.actor_id);
+      const { data: profiles } = await adminClient
+        .from('profiles')
+        .select('*')
+        .in('user_id', actorIds);
+
+      const profileMap = new Map<string, any>();
+      (profiles || []).forEach((p: any) => profileMap.set(p.user_id, p));
+
+      const result: VisitActivity[] = (activities || []).map((a: any) => {
+        const prof = profileMap.get(a.actor_id);
+        return {
+          id: a.id as UUID,
+          visitId: a.visit_id as VisitId,
+          organizationId: a.organization_id,
+          actorId: a.actor_id as UserId,
+          action: a.action,
+          details: a.details || {},
+          actor: prof ? mapDbProfileToUserProfile(prof) : undefined,
+          createdAt: a.created_at as IsoDateTime,
+        };
+      });
+
+      return NextResponse.json({ success: true, data: result });
+    } catch (err: any) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },
+        { status: 500 }
+      );
+    }
   }
 
-  return NextResponse.json({ success: true, data: activities });
+  return NextResponse.json({ success: true, data: [] });
 }

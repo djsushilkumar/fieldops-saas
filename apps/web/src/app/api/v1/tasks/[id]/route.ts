@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryDb } from '@/lib/server-store';
-import { Task, TaskId, TenantId, IsoDateTime } from '@fieldops/types';
+import { requireTenantContext } from '@/lib/auth-guards';
+import {
+  getSupabaseAdminClient,
+  mapDbTaskToTask,
+  isSupabaseConfigured,
+} from '@/lib/supabase-server';
+import { UserRole } from '@fieldops/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,72 +13,162 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const tenantId = request.headers.get('x-tenant-id') ||
-    request.cookies.get('fieldops_active_org_id')?.value || 'default';
-  const orgTasks = memoryDb.tasks.get(tenantId) || [];
-  let task = orgTasks.find((t) => t.id === params.id);
-
-  if (!task) {
-    task = {
-      id: params.id as TaskId,
-      organizationId: tenantId as TenantId,
-      title: 'Operational Task',
-      status: 'ASSIGNED' as any,
-      priority: 'MEDIUM' as any,
-      createdBy: 'usr_owner' as any,
-      version: 1,
-      createdAt: new Date().toISOString() as IsoDateTime,
-      updatedAt: new Date().toISOString() as IsoDateTime,
-      checklists: [],
-    };
-    orgTasks.push(task);
-    memoryDb.tasks.set(tenantId, orgTasks);
+  const guardResult = await requireTenantContext(request);
+  if (!guardResult.success) {
+    return guardResult.response;
   }
 
-  return NextResponse.json({ success: true, data: task });
+  const { tenantId, user, role } = guardResult.context;
+  const adminClient = getSupabaseAdminClient();
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { data: taskRow, error: taskErr } = await adminClient
+        .from('tasks')
+        .select('*')
+        .eq('id', params.id)
+        .eq('organization_id', tenantId)
+        .maybeSingle();
+
+      if (taskErr || !taskRow) {
+        return NextResponse.json(
+          { success: false, error: { code: 'NOT_FOUND', message: 'Task not found in this organization' } },
+          { status: 404 }
+        );
+      }
+
+      // Field Workers can only view their own assigned tasks
+      if (role === UserRole.FIELD_WORKER && taskRow.assigned_to !== user.id) {
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'You can only view tasks assigned to you' } },
+          { status: 403 }
+        );
+      }
+
+      const { data: checklistRows } = await adminClient
+        .from('task_checklists')
+        .select('*')
+        .eq('task_id', params.id)
+        .order('position', { ascending: true });
+
+      return NextResponse.json({
+        success: true,
+        data: mapDbTaskToTask(taskRow, checklistRows || []),
+      });
+    } catch (err: any) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },
+        { status: 500 }
+      );
+    }
+  }
+
+  return NextResponse.json(
+    { success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } },
+    { status: 404 }
+  );
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const guardResult = await requireTenantContext(request, [
+    UserRole.OWNER,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+  ]);
+  if (!guardResult.success) {
+    return guardResult.response;
+  }
+
+  const { tenantId, user } = guardResult.context;
+  const adminClient = getSupabaseAdminClient();
+
   try {
-    const tenantId = (request.headers.get('x-tenant-id') ||
-      request.cookies.get('fieldops_active_org_id')?.value || 'default') as TenantId;
     const body = await request.json();
-    const orgTasks = memoryDb.tasks.get(tenantId) || [];
-    const index = orgTasks.findIndex((t) => t.id === params.id);
 
-    let updatedTask: Task;
-    if (index === -1) {
-      updatedTask = {
-        id: params.id as TaskId,
-        organizationId: tenantId,
-        title: body.title || 'Operational Task',
-        description: body.description,
-        status: body.status || ('ASSIGNED' as any),
-        priority: body.priority || ('MEDIUM' as any),
-        createdBy: 'usr_owner' as any,
-        dueAt: body.dueAt,
-        version: 1,
-        createdAt: new Date().toISOString() as IsoDateTime,
-        updatedAt: new Date().toISOString() as IsoDateTime,
-        checklists: body.checklists || [],
-        ...body,
+    if (isSupabaseConfigured()) {
+      // 1. Fetch current task to check version
+      const { data: currentTask, error: fetchErr } = await adminClient
+        .from('tasks')
+        .select('*')
+        .eq('id', params.id)
+        .eq('organization_id', tenantId)
+        .maybeSingle();
+
+      if (fetchErr || !currentTask) {
+        return NextResponse.json(
+          { success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } },
+          { status: 404 }
+        );
+      }
+
+      // Optimistic concurrency check if version passed
+      if (body.version !== undefined && body.version !== currentTask.version) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'TASK_CONFLICT',
+              message: `Version conflict: client version ${body.version} does not match server version ${currentTask.version}`,
+            },
+          },
+          { status: 409 }
+        );
+      }
+
+      const updates: Record<string, any> = {
+        version: currentTask.version + 1,
+        updated_at: new Date().toISOString(),
       };
-      orgTasks.push(updatedTask);
-    } else {
-      updatedTask = {
-        ...orgTasks[index],
-        ...body,
-        version: orgTasks[index].version + 1,
-        updatedAt: new Date().toISOString() as IsoDateTime,
-      };
-      orgTasks[index] = updatedTask;
+
+      if (body.title !== undefined) updates.title = body.title.trim();
+      if (body.description !== undefined) updates.description = body.description;
+      if (body.priority !== undefined) updates.priority = body.priority;
+      if (body.assignedTo !== undefined) updates.assigned_to = body.assignedTo;
+      if (body.locationId !== undefined) updates.location_id = body.locationId;
+      if (body.dueAt !== undefined) updates.due_at = body.dueAt;
+
+      const { data: updatedTask, error: updateErr } = await adminClient
+        .from('tasks')
+        .update(updates)
+        .eq('id', params.id)
+        .eq('organization_id', tenantId)
+        .select()
+        .single();
+
+      if (updateErr || !updatedTask) {
+        return NextResponse.json(
+          { success: false, error: { code: 'DATABASE_ERROR', message: updateErr?.message } },
+          { status: 500 }
+        );
+      }
+
+      await adminClient.from('task_activities').insert({
+        task_id: params.id,
+        organization_id: tenantId,
+        actor_id: user.id,
+        action: 'TASK_UPDATED',
+        details: updates,
+      });
+
+      const { data: checklistRows } = await adminClient
+        .from('task_checklists')
+        .select('*')
+        .eq('task_id', params.id);
+
+      return NextResponse.json({
+        success: true,
+        data: mapDbTaskToTask(updatedTask, checklistRows || []),
+      });
     }
-    memoryDb.tasks.set(tenantId, orgTasks);
 
-    return NextResponse.json({ success: true, data: updatedTask });
+    return NextResponse.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } },
+      { status: 404 }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },
@@ -86,11 +181,49 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const tenantId = request.headers.get('x-tenant-id') ||
-    request.cookies.get('fieldops_active_org_id')?.value || 'default';
-  const orgTasks = memoryDb.tasks.get(tenantId) || [];
-  const filtered = orgTasks.filter((t) => t.id !== params.id);
-  memoryDb.tasks.set(tenantId, filtered);
+  const guardResult = await requireTenantContext(request, [
+    UserRole.OWNER,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+  ]);
+  if (!guardResult.success) {
+    return guardResult.response;
+  }
+
+  const { tenantId, user } = guardResult.context;
+  const adminClient = getSupabaseAdminClient();
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await adminClient
+        .from('tasks')
+        .delete()
+        .eq('id', params.id)
+        .eq('organization_id', tenantId);
+
+      if (error) {
+        return NextResponse.json(
+          { success: false, error: { code: 'DATABASE_ERROR', message: error.message } },
+          { status: 500 }
+        );
+      }
+
+      await adminClient.from('task_activities').insert({
+        task_id: params.id,
+        organization_id: tenantId,
+        actor_id: user.id,
+        action: 'TASK_DELETED',
+        details: { deletedAt: new Date().toISOString() },
+      });
+
+      return NextResponse.json({ success: true, data: { success: true } });
+    } catch (err: any) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INTERNAL_ERROR', message: err?.message } },
+        { status: 500 }
+      );
+    }
+  }
 
   return NextResponse.json({ success: true, data: { success: true } });
 }

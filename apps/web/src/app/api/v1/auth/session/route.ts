@@ -1,87 +1,134 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryDb, createSessionResponse, ensureTenantSeeded } from '@/lib/server-store';
-import { TenantId, UserProfile, Organization, IsoDateTime } from '@fieldops/types';
+import {
+  AuthSession,
+  Membership,
+  Organization,
+  TenantId,
+  IsoDateTime,
+} from '@fieldops/types';
+import {
+  requireAuthenticatedUser,
+  extractRequestedTenantId,
+} from '@/lib/auth-guards';
+import {
+  getSupabaseAdminClient,
+  mapDbOrgToOrganization,
+  mapDbMembershipToMembership,
+  isSupabaseConfigured,
+} from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
-    request.cookies.get('fieldops_access_token')?.value;
-
-  const orgId = (request.headers.get('x-tenant-id') ||
-    request.cookies.get('fieldops_active_org_id')?.value) as TenantId | undefined;
-
-  if (!token) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: 'UNAUTHORIZED', message: 'Not authenticated' },
-      },
-      { status: 401 }
-    );
+  // 1. PHASE 1 MANDATORY: Strict Authentication Guard
+  // Returns 401 on missing, malformed, expired, or invalid token. Never falls back to default user.
+  const authResult = await requireAuthenticatedUser(request);
+  if (!authResult.success) {
+    return authResult.response;
   }
 
-  let user: UserProfile | undefined;
-  let org: Organization | undefined;
+  const { user, token } = authResult.context;
+  const adminClient = getSupabaseAdminClient();
+  const requestedTenantId = extractRequestedTenantId(request);
 
-  if (token && token.startsWith('fo_jwt_')) {
+  let memberships: Membership[] = [];
+  let activeMembership: Membership | undefined;
+
+  if (isSupabaseConfigured()) {
     try {
-      const payloadStr = Buffer.from(token.slice(7), 'base64url').toString('utf8');
-      const payload = JSON.parse(payloadStr);
-      if (payload.email) {
-        user = memoryDb.users.get(payload.email.toLowerCase()) || {
-          id: payload.sub || `usr_${Date.now()}`,
-          email: payload.email,
-          fullName: payload.fullName || payload.email.split('@')[0],
-          timezone: 'Asia/Kolkata',
-          createdAt: new Date().toISOString() as IsoDateTime,
-          updatedAt: new Date().toISOString() as IsoDateTime,
-        };
+      // 2. Fetch all ACTIVE memberships for this verified user
+      const { data: memRows, error: memErr } = await adminClient
+        .from('memberships')
+        .select(`
+          id,
+          organization_id,
+          user_id,
+          role,
+          status,
+          created_at,
+          updated_at,
+          organizations (*)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'ACTIVE');
+
+      if (!memErr && memRows && memRows.length > 0) {
+        memberships = memRows.map((row: any) => {
+          const org = row.organizations ? mapDbOrgToOrganization(row.organizations) : undefined;
+          return mapDbMembershipToMembership(row, org, user);
+        });
+
+        // 3. Resolve active membership strictly from user's verified memberships
+        if (requestedTenantId) {
+          activeMembership = memberships.find((m) => m.organizationId === requestedTenantId);
+        }
+
+        // If requested tenant not found in user's memberships or not provided, pick first active
+        if (!activeMembership && memberships.length > 0) {
+          activeMembership = memberships[0];
+        }
       }
-      const tenantToUse = (orgId || payload.tenant_id) as TenantId | undefined;
-      if (tenantToUse) {
-        ensureTenantSeeded(tenantToUse);
-        org = memoryDb.organizations.get(tenantToUse) || {
-          id: tenantToUse,
-          name: 'Enterprise Organization',
-          slug: String(tenantToUse).replace('org_', ''),
-          subscriptionTier: 'GROWTH' as any,
-          subscriptionStatus: 'ACTIVE' as any,
-          settings: {
-            allowedRadiusMeters: 100,
-            timezone: 'Asia/Kolkata',
-            requirePhotoProof: true,
-            requireSignature: false,
-          },
-          createdAt: new Date().toISOString() as IsoDateTime,
-          updatedAt: new Date().toISOString() as IsoDateTime,
-        };
-      }
-    } catch {
-      // ignore parse errors and fallback
+    } catch (err) {
+      console.error('[Session API]: Failed to query user memberships', err);
     }
-  }
-
-  if (!user) {
-    user = Array.from(memoryDb.users.values())[0];
-  }
-  if (!org) {
-    org = (orgId ? memoryDb.organizations.get(orgId) : undefined) || Array.from(memoryDb.organizations.values())[0];
-  }
-
-  if (!user || !org) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: 'UNAUTHORIZED', message: 'Session expired or not found' },
+  } else {
+    // Isolated mock/test fallback
+    const tenantToUse = requestedTenantId || ('org_default' as TenantId);
+    const mockOrg: Organization = {
+      id: tenantToUse,
+      name: 'Field Operations',
+      slug: 'field-operations',
+      subscriptionTier: 'GROWTH',
+      subscriptionStatus: 'ACTIVE',
+      settings: {
+        allowedRadiusMeters: 150,
+        timezone: 'UTC',
+        requirePhotoProof: true,
+        requireSignature: false,
       },
-      { status: 401 }
-    );
+      createdAt: new Date().toISOString() as IsoDateTime,
+      updatedAt: new Date().toISOString() as IsoDateTime,
+    };
+    const mockMem: Membership = {
+      id: 'mem_default' as any,
+      organizationId: tenantToUse,
+      userId: user.id,
+      role: 'OWNER' as any,
+      status: 'ACTIVE' as any,
+      createdAt: new Date().toISOString() as IsoDateTime,
+      updatedAt: new Date().toISOString() as IsoDateTime,
+      organization: mockOrg,
+      user,
+    };
+    memberships = [mockMem];
+    activeMembership = mockMem;
   }
 
-  const session = createSessionResponse(user, org);
-  return NextResponse.json({
+  const sessionResponse: AuthSession = {
+    user,
+    tokens: {
+      accessToken: token,
+      expiresIn: 604800,
+      tokenType: 'Bearer',
+    },
+    activeMembership: activeMembership || undefined,
+    availableMemberships: memberships,
+  };
+
+  const response = NextResponse.json({
     success: true,
-    data: session,
+    data: sessionResponse,
   });
+
+  if (activeMembership) {
+    response.cookies.set('fieldops_active_org_id', activeMembership.organizationId, {
+      path: '/',
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 86400 * 7,
+    });
+  }
+
+  return response;
 }

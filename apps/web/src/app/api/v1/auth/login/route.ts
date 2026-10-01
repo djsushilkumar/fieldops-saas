@@ -3,11 +3,21 @@ import { signInSchema } from '@fieldops/validation';
 import {
   UserProfile,
   Organization,
-  TenantId,
-  UserId,
+  Membership,
+  AuthSession,
   IsoDateTime,
+  UserId,
+  TenantId,
+  UserRole,
+  MembershipStatus,
 } from '@fieldops/types';
-import { memoryDb, createSessionResponse, syncWithSupabaseAuth } from '@/lib/server-store';
+import {
+  getSupabaseAdminClient,
+  mapDbProfileToUserProfile,
+  mapDbOrgToOrganization,
+  mapDbMembershipToMembership,
+  isSupabaseConfigured,
+} from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +32,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parseResult.error.errors[0]?.message || 'Invalid credentials',
+            message: parseResult.error.errors[0]?.message || 'Invalid credentials format',
           },
         },
         { status: 400 }
@@ -30,68 +40,160 @@ export async function POST(request: NextRequest) {
     }
 
     const { email, password } = parseResult.data;
-    const lowerEmail = email.toLowerCase();
+    const lowerEmail = email.toLowerCase().trim();
+    const adminClient = getSupabaseAdminClient();
 
-    let user = memoryDb.users.get(lowerEmail);
-    const storedPass = memoryDb.passwords.get(lowerEmail);
+    let user: UserProfile;
+    let accessToken: string;
+    let memberships: Membership[] = [];
+    let activeMembership: Membership | undefined;
 
-    if (user && storedPass && storedPass !== password) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_CREDENTIALS',
-            message: 'Invalid email or password',
-          },
-        },
-        { status: 401 }
-      );
-    }
-
-    if (!user) {
-      const supabaseData = await syncWithSupabaseAuth('token?grant_type=password', {
-        email,
+    if (isSupabaseConfigured()) {
+      // 1. Authenticate with Supabase Auth
+      const { data: authData, error: authError } = await adminClient.auth.signInWithPassword({
+        email: lowerEmail,
         password,
       });
 
+      if (authError || !authData.session || !authData.user) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'INVALID_CREDENTIALS',
+              message: authError?.message || 'Invalid email or password',
+            },
+          },
+          { status: 401 }
+        );
+      }
+
+      accessToken = authData.session.access_token;
+      const sbUser = authData.user;
+
+      // 2. Fetch Profile from profiles table
+      const { data: profileRow } = await adminClient
+        .from('profiles')
+        .select('*')
+        .eq('user_id', sbUser.id)
+        .maybeSingle();
+
+      if (profileRow) {
+        user = mapDbProfileToUserProfile(profileRow);
+      } else {
+        const { data: newProfile } = await adminClient
+          .from('profiles')
+          .insert({
+            user_id: sbUser.id,
+            email: lowerEmail,
+            full_name: sbUser.user_metadata?.full_name || lowerEmail.split('@')[0],
+            timezone: 'UTC',
+          })
+          .select()
+          .single();
+
+        user = newProfile
+          ? mapDbProfileToUserProfile(newProfile)
+          : {
+              id: sbUser.id as UserId,
+              email: lowerEmail,
+              fullName: sbUser.user_metadata?.full_name || lowerEmail.split('@')[0],
+              timezone: 'UTC',
+              createdAt: new Date().toISOString() as IsoDateTime,
+              updatedAt: new Date().toISOString() as IsoDateTime,
+            };
+      }
+
+      // 3. Fetch user's active memberships
+      const { data: memRows } = await adminClient
+        .from('memberships')
+        .select(`
+          id,
+          organization_id,
+          user_id,
+          role,
+          status,
+          created_at,
+          updated_at,
+          organizations (*)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'ACTIVE');
+
+      if (memRows && memRows.length > 0) {
+        memberships = memRows.map((row: any) => {
+          const org = row.organizations ? mapDbOrgToOrganization(row.organizations) : undefined;
+          return mapDbMembershipToMembership(row, org, user);
+        });
+        activeMembership = memberships[0];
+      }
+    } else {
+      // Offline/Test fallback mode
       const now = new Date().toISOString() as IsoDateTime;
-      const userId = (supabaseData?.user?.id || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`) as UserId;
+      const userId = `usr_${Buffer.from(lowerEmail).toString('hex').slice(0, 12)}` as UserId;
+      const orgId = 'org_default' as TenantId;
+
       user = {
         id: userId,
-        email,
-        fullName: supabaseData?.user?.user_metadata?.full_name || email.split('@')[0],
+        email: lowerEmail,
+        fullName: lowerEmail.split('@')[0],
         timezone: 'UTC',
         createdAt: now,
         updatedAt: now,
       };
-      memoryDb.users.set(lowerEmail, user);
-      memoryDb.passwords.set(lowerEmail, password);
+
+      const mockOrg: Organization = {
+        id: orgId,
+        name: 'Field Operations',
+        slug: 'field-operations',
+        subscriptionTier: 'GROWTH',
+        subscriptionStatus: 'ACTIVE',
+        settings: {
+          allowedRadiusMeters: 150,
+          timezone: 'UTC',
+          requirePhotoProof: true,
+          requireSignature: false,
+        },
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const mockMem: Membership = {
+        id: 'mem_default' as any,
+        organizationId: orgId,
+        userId,
+        role: UserRole.OWNER,
+        status: MembershipStatus.ACTIVE,
+        createdAt: now,
+        updatedAt: now,
+        organization: mockOrg,
+        user,
+      };
+
+      memberships = [mockMem];
+      activeMembership = mockMem;
+      accessToken = `fo_jwt_${Buffer.from(
+        JSON.stringify({
+          sub: userId,
+          email: lowerEmail,
+          tenant_id: orgId,
+          role: UserRole.OWNER,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 86400 * 7,
+        })
+      ).toString('base64url')}`;
     }
 
-    let org: Organization | undefined;
-    const userMemberships = memoryDb.memberships.get(user.id);
-    if (userMemberships && userMemberships.length > 0) {
-      org = memoryDb.organizations.get(userMemberships[0].organizationId);
-    }
-
-    const activeOrg: Organization = org || memoryDb.organizations.get('org_default' as TenantId) || {
-      id: 'org_default' as TenantId,
-      name: 'Field Operations',
-      slug: 'field-operations',
-      subscriptionTier: 'GROWTH',
-      subscriptionStatus: 'ACTIVE',
-      settings: {
-        allowedRadiusMeters: 150,
-        timezone: 'UTC',
-        requirePhotoProof: true,
-        requireSignature: false,
+    const session: AuthSession = {
+      user,
+      tokens: {
+        accessToken,
+        expiresIn: 604800,
+        tokenType: 'Bearer',
       },
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      activeMembership: activeMembership || undefined,
+      availableMemberships: memberships,
     };
-    memoryDb.organizations.set(activeOrg.id, activeOrg);
-
-    const session = createSessionResponse(user, activeOrg);
 
     const response = NextResponse.json({
       success: true,
@@ -106,13 +208,15 @@ export async function POST(request: NextRequest) {
       maxAge: 86400 * 7,
     });
 
-    response.cookies.set('fieldops_active_org_id', activeOrg.id, {
-      path: '/',
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 86400 * 7,
-    });
+    if (activeMembership) {
+      response.cookies.set('fieldops_active_org_id', activeMembership.organizationId, {
+        path: '/',
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 86400 * 7,
+      });
+    }
 
     return response;
   } catch (error: any) {

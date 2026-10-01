@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage/in_memory_secure_storage.dart';
 import '../../../core/storage/secure_storage_contract.dart';
@@ -100,6 +101,9 @@ class AuthNotifier extends StateNotifier<AuthStatusState> {
   }
 
   Future<void> signInWithDemo() async {
+    if (kReleaseMode) {
+      throw Exception('Demo mode is disabled in production release builds.');
+    }
     state = state.copyWith(authState: AuthState.authenticating, clearError: true);
     const demoOrg = Organization(
       id: 'org_fieldops_demo',
