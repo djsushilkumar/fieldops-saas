@@ -10,6 +10,7 @@ import { UserRole, MembershipStatus } from '@fieldops/types';
 vi.mock('../../src/lib/supabase-server', () => {
   return {
     isSupabaseConfigured: vi.fn().mockReturnValue(true),
+    isTestMockAllowed: vi.fn().mockReturnValue(false),
     verifySupabaseToken: vi.fn(),
     getSupabaseAdminClient: vi.fn(),
     getSupabaseUserClient: vi.fn(),
@@ -53,6 +54,8 @@ vi.mock('../../src/lib/supabase-server', () => {
 import {
   verifySupabaseToken,
   getSupabaseAdminClient,
+  isSupabaseConfigured,
+  isTestMockAllowed,
 } from '../../src/lib/supabase-server';
 
 describe('Phase 1 & 2 Security: Auth Guards & Tenant Isolation Matrix', () => {
@@ -65,6 +68,8 @@ describe('Phase 1 & 2 Security: Auth Guards & Tenant Isolation Matrix', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    vi.mocked(isTestMockAllowed).mockReturnValue(false);
   });
 
   function createRequest(options: {
@@ -123,6 +128,25 @@ describe('Phase 1 & 2 Security: Auth Guards & Tenant Isolation Matrix', () => {
         const data = await result.response.json();
         expect(data.error.code).toBe('UNAUTHORIZED');
         expect(data.error.message).toContain('expired or invalid');
+      }
+    });
+
+    it('returns 503 SERVICE_UNAVAILABLE when Supabase is not configured and mocks are disabled (fail-closed)', async () => {
+      vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+      vi.mocked(isTestMockAllowed).mockReturnValue(false);
+      vi.mocked(verifySupabaseToken).mockResolvedValueOnce({
+        user: null,
+        error: new Error('Authentication backend service is unavailable.'),
+      });
+
+      const req = createRequest({ token: 'some_token' });
+      const result = await requireAuthenticatedUser(req);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.response.status).toBe(503);
+        const data = await result.response.json();
+        expect(data.error.code).toBe('SERVICE_UNAVAILABLE');
       }
     });
 
@@ -405,6 +429,40 @@ describe('Phase 1 & 2 Security: Auth Guards & Tenant Isolation Matrix', () => {
         expect(result.response.status).toBe(403);
         const data = await result.response.json();
         expect(data.error.code).toBe('INSUFFICIENT_PERMISSIONS');
+      }
+    });
+
+    it('returns 503 SERVICE_UNAVAILABLE when database is unconfigured (fail closed, never grants synthetic OWNER)', async () => {
+      vi.mocked(verifySupabaseToken).mockResolvedValueOnce({
+        user: { id: userAId, email: 'alice@fieldops.com' } as any,
+        error: null,
+      });
+      // In requireAuthenticatedUser, Supabase is configured:
+      vi.mocked(isSupabaseConfigured).mockReturnValueOnce(true);
+      // In requireTenantContext, Supabase is unconfigured and mocks disabled:
+      vi.mocked(isSupabaseConfigured).mockReturnValueOnce(false);
+      vi.mocked(isTestMockAllowed).mockReturnValue(false);
+
+      const mockAdmin = {
+        from: vi.fn().mockImplementation(() => ({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: 'prof_1', user_id: userAId, email: 'alice@fieldops.com' },
+          }),
+        })),
+      };
+      vi.mocked(getSupabaseAdminClient).mockReturnValue(mockAdmin as any);
+
+      const req = createRequest({ token: 'valid_token', tenantHeader: tenantA });
+      const result = await requireTenantContext(req);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.response.status).toBe(503);
+        const data = await result.response.json();
+        expect(data.error.code).toBe('SERVICE_UNAVAILABLE');
+        expect(data.error.message).toContain('Fail closed: synthetic memberships strictly forbidden');
       }
     });
   });

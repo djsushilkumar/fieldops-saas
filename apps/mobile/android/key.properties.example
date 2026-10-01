@@ -1,0 +1,7 @@
+# FieldOps Android Release Keystore Configuration
+# Copy this file to key.properties and replace placeholder values with your production signing credentials.
+# NEVER commit key.properties or .jks/.keystore files to version control.
+storePassword=your_keystore_password_here
+keyPassword=your_key_password_here
+keyAlias=fieldops_release_key
+storeFile=/path/to/keystore/fieldops-release.jks

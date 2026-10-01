@@ -17,6 +17,7 @@ import {
   mapDbOrgToOrganization,
   mapDbMembershipToMembership,
   isSupabaseConfigured,
+  isTestMockAllowed,
 } from './supabase-server';
 
 export interface AuthenticatedUserContext {
@@ -101,17 +102,20 @@ export async function requireAuthenticatedUser(
   const { user: sbUser, error: authError } = await verifySupabaseToken(token);
 
   if (authError || !sbUser) {
+    const isServiceUnavailable = !isSupabaseConfigured() && !isTestMockAllowed();
     return {
       success: false,
       response: NextResponse.json(
         {
           success: false,
           error: {
-            code: 'UNAUTHORIZED',
-            message: authError?.message || 'Invalid or expired session token.',
+            code: isServiceUnavailable ? 'SERVICE_UNAVAILABLE' : 'UNAUTHORIZED',
+            message: isServiceUnavailable
+              ? 'Authentication service is unavailable. Fail closed.'
+              : authError?.message || 'Invalid or expired session token.',
           },
         },
-        { status: 401 }
+        { status: isServiceUnavailable ? 503 : 401 }
       ),
     };
   }
@@ -169,6 +173,23 @@ export async function requireAuthenticatedUser(
       };
     }
   } else {
+    // If not configured, check isTestMockAllowed()
+    if (!isTestMockAllowed()) {
+      return {
+        success: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'SERVICE_UNAVAILABLE',
+              message: 'Authentication and profile persistence service is unavailable. Fail closed.',
+            },
+          },
+          { status: 503 }
+        ),
+      };
+    }
+
     userProfile = {
       id: sbUser.id as UserId,
       email: sbUser.email || '',
@@ -314,7 +335,25 @@ export async function requireTenantContext(
       };
     }
   } else {
-    // In test/mock environment without live DB connection, construct validated membership
+    // If Supabase is unconfigured, FAIL CLOSED in production or whenever test mocks are disabled
+    if (!isTestMockAllowed()) {
+      return {
+        success: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'SERVICE_UNAVAILABLE',
+              message:
+                'Tenant authorization and persistence service is unavailable. Fail closed: synthetic memberships strictly forbidden.',
+            },
+          },
+          { status: 503 }
+        ),
+      };
+    }
+
+    // In isolated test/mock environment without live DB connection, construct mock membership
     organization = {
       id: requestedTenantId,
       name: 'Organization ' + requestedTenantId,
@@ -377,3 +416,23 @@ export async function requireTenantContext(
     },
   };
 }
+
+/**
+ * Convenience helper to enforce active membership requirement.
+ */
+export async function requireActiveMembership(
+  request: NextRequest
+): Promise<AuthGuardResult<TenantSecurityContext>> {
+  return requireTenantContext(request);
+}
+
+/**
+ * Convenience helper to enforce role authorization requirement.
+ */
+export async function requireRole(
+  request: NextRequest,
+  allowedRoles: UserRole[]
+): Promise<AuthGuardResult<TenantSecurityContext>> {
+  return requireTenantContext(request, allowedRoles);
+}
+

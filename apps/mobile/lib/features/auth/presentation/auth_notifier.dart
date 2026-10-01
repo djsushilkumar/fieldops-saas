@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/storage/encrypted_secure_storage.dart';
 import '../../../core/storage/in_memory_secure_storage.dart';
 import '../../../core/storage/secure_storage_contract.dart';
 import '../data/auth_repository.dart';
@@ -48,7 +49,13 @@ final appConfigProvider = Provider<AppConfig>((ref) {
 });
 
 final secureStorageProvider = Provider<SecureStorageContract>((ref) {
-  return InMemorySecureStorage();
+  // Use InMemorySecureStorage in automated test runners.
+  // In production/device runtime, use hardware-backed EncryptedSecureStorage (Android Keystore / iOS Keychain).
+  const isTest = bool.fromEnvironment('flutter.test', defaultValue: false);
+  if (isTest || kIsWeb) {
+    return InMemorySecureStorage();
+  }
+  return EncryptedSecureStorage();
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

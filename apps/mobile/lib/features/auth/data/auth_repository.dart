@@ -126,9 +126,7 @@ class AuthRepository {
         ).catchError((_) => http.Response('', 500));
       }
     } finally {
-      await _secureStorage.deleteSecret(keyAccessToken);
-      await _secureStorage.deleteSecret(keyRefreshToken);
-      await _secureStorage.deleteSecret(keyActiveTenantId);
+      await _secureStorage.clearAllSecrets();
     }
   }
 

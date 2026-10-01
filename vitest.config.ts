@@ -8,6 +8,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, './apps/web/src'),
       '@fieldops/types': path.resolve(__dirname, './packages/types/src/index.ts'),
       '@fieldops/validation': path.resolve(__dirname, './packages/validation/src/index.ts'),
       '@fieldops/config': path.resolve(__dirname, './packages/config/src/index.ts'),

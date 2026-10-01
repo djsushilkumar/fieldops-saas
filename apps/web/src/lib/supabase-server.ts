@@ -22,15 +22,97 @@ import {
 } from '@fieldops/types';
 
 // =============================================================================
-// 1. SUPABASE CLIENT FACTORIES
+// 1. PRODUCTION CONFIGURATION VALIDATION & CLIENT FACTORIES
 // =============================================================================
 
+export interface ProductionConfigValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * Validates that production environment variables are properly defined and safe.
+ * Rejects empty strings, placeholders, and dangerous defaults.
+ */
+export function validateProductionConfig(): ProductionConfigValidationResult {
+  const errors: string[] = [];
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  if (!url || url.trim() === '') {
+    errors.push('SUPABASE_URL is missing or empty.');
+  } else if (url.includes('placeholder') || url.includes('example.com')) {
+    errors.push(`SUPABASE_URL contains placeholder or example domain: ${url}`);
+  } else {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        errors.push(`SUPABASE_URL must use HTTP or HTTPS protocol: ${url}`);
+      }
+    } catch {
+      errors.push(`SUPABASE_URL is not a valid URL: ${url}`);
+    }
+  }
+
+  if (!anonKey || anonKey.trim() === '') {
+    errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_ANON_KEY is missing or empty.');
+  } else if (anonKey.includes('placeholder')) {
+    errors.push('SUPABASE_ANON_KEY contains placeholder text.');
+  }
+
+  if (!serviceKey || serviceKey.trim() === '') {
+    errors.push('SUPABASE_SERVICE_ROLE_KEY is missing or empty.');
+  } else if (serviceKey.includes('placeholder')) {
+    errors.push('SUPABASE_SERVICE_ROLE_KEY contains placeholder text.');
+  } else if (anonKey && serviceKey === anonKey) {
+    errors.push('SUPABASE_SERVICE_ROLE_KEY must not be identical to the anonymous key.');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Asserts production configuration. Throws immediately if running in production
+ * and configuration validation fails.
+ */
+export function assertProductionConfig(): void {
+  const isProd = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
+  if (!isProd) {
+    return;
+  }
+  const result = validateProductionConfig();
+  if (!result.valid) {
+    throw new Error(
+      `[CRITICAL CONFIGURATION ERROR] Production startup/runtime validation failed:\n- ${result.errors.join('\n- ')}`
+    );
+  }
+}
+
+/**
+ * Explicit environment guard for test fixtures. Mocks are NEVER permitted in production
+ * and require explicit ENABLE_TEST_MOCKS === 'true' in non-production environments.
+ */
+export function isTestMockAllowed(): boolean {
+  if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production') {
+    return false;
+  }
+  return process.env.ENABLE_TEST_MOCKS === 'true';
+}
+
 export function getSupabaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    'https://prod-api.fieldops.com/supabase'
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  if (!url) {
+    const isProd = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
+    if (isProd) {
+      assertProductionConfig();
+    }
+    return '';
+  }
+  return url;
 }
 
 export function getSupabaseAnonKey(): string {
@@ -41,24 +123,33 @@ export function getSupabaseAnonKey(): string {
   );
 }
 
+/**
+ * Returns the privileged Supabase service role key.
+ * Strictly NEVER falls back to the anonymous key.
+ */
 export function getSupabaseServiceRoleKey(): string {
-  return (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    getSupabaseAnonKey()
-  );
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 }
 
+/**
+ * Verifies that Supabase configuration is present and non-placeholder.
+ */
 export function isSupabaseConfigured(): boolean {
-  const url = getSupabaseUrl();
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return Boolean(
-    url &&
-    !url.includes('placeholder') &&
-    (anonKey || serviceKey) &&
-    !anonKey?.includes('placeholder') &&
-    !serviceKey?.includes('placeholder')
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  if (!url || url.includes('placeholder') || url.includes('example.com')) {
+    return false;
+  }
+  if (!anonKey || anonKey.includes('placeholder')) {
+    return false;
+  }
+  if (!serviceKey || serviceKey.includes('placeholder') || serviceKey === anonKey) {
+    return false;
+  }
+
+  return true;
 }
 
 let cachedAdminClient: SupabaseClient | null = null;
@@ -66,13 +157,27 @@ let cachedAdminClient: SupabaseClient | null = null;
 /**
  * Returns a privileged Supabase admin client using the service role key.
  * Used strictly for server-side auth verification and controlled procedures.
+ * Fails fast if configuration is missing in production.
  */
 export function getSupabaseAdminClient(): SupabaseClient {
+  const isProd = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
+  if (isProd) {
+    assertProductionConfig();
+  }
+
   const url = getSupabaseUrl();
-  const serviceKey = getSupabaseServiceRoleKey() || 'placeholder-service-key-for-offline';
+  const serviceKey = getSupabaseServiceRoleKey();
+
+  if (!url || !serviceKey) {
+    if (isProd || !isTestMockAllowed()) {
+      throw new Error(
+        'Supabase admin client initialization failed: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.'
+      );
+    }
+  }
 
   if (!cachedAdminClient) {
-    cachedAdminClient = createClient(url, serviceKey, {
+    cachedAdminClient = createClient(url || 'http://localhost:54321', serviceKey || 'test-key', {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -89,10 +194,23 @@ export function getSupabaseAdminClient(): SupabaseClient {
  * Supabase PostgreSQL evaluates RLS policies (e.g., auth.uid()) under this client.
  */
 export function getSupabaseUserClient(accessToken: string): SupabaseClient {
-  const url = getSupabaseUrl();
-  const anonKey = getSupabaseAnonKey() || 'placeholder-anon-key-for-offline';
+  const isProd = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
+  if (isProd) {
+    assertProductionConfig();
+  }
 
-  return createClient(url, anonKey, {
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
+
+  if (!url || !anonKey) {
+    if (isProd || !isTestMockAllowed()) {
+      throw new Error(
+        'Supabase user client initialization failed: SUPABASE_URL and SUPABASE_ANON_KEY are required.'
+      );
+    }
+  }
+
+  return createClient(url || 'http://localhost:54321', anonKey || 'test-anon-key', {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -109,6 +227,7 @@ export function getSupabaseUserClient(accessToken: string): SupabaseClient {
 /**
  * Cryptographically verifies a Supabase Auth access token using Supabase Auth.
  * Returns the Supabase User on success, or null on failure/expiration.
+ * Strictly rejects mock tokens unless explicit test mock mode is enabled.
  */
 export async function verifySupabaseToken(
   accessToken: string
@@ -117,12 +236,15 @@ export async function verifySupabaseToken(
     return { user: null, error: new Error('Token is missing or empty') };
   }
 
-  // Reject unsigned fo_jwt_ mock tokens in strict production
+  // Reject unsigned fo_jwt_ mock tokens in production or whenever test mocks are disabled
   if (accessToken.startsWith('fo_jwt_')) {
-    if (process.env.NODE_ENV === 'production' && isSupabaseConfigured()) {
-      return { user: null, error: new Error('Unsigned mock token rejected in production') };
+    if (!isTestMockAllowed()) {
+      return {
+        user: null,
+        error: new Error('Unsigned mock token rejected. Production Supabase session required.'),
+      };
     }
-    // Allow decoding only in isolated mock/test mode
+    // Allow decoding only in explicit test mock mode
     try {
       const payloadStr = Buffer.from(accessToken.slice(7), 'base64url').toString('utf8');
       const payload = JSON.parse(payloadStr);
@@ -139,6 +261,13 @@ export async function verifySupabaseToken(
     } catch {
       return { user: null, error: new Error('Malformed token') };
     }
+  }
+
+  if (!isSupabaseConfigured()) {
+    return {
+      user: null,
+      error: new Error('Authentication backend service is unavailable.'),
+    };
   }
 
   try {
